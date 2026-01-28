@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SH Innovation 통합 매출 시스템 (Ver 14.0 - 쿠팡 옵션 결합)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 15.0 - 최종완성)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -18,13 +18,15 @@
         .form-label { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; color: #495057; }
         .sticky-col { position: sticky; left: 0; background-color: white; z-index: 1; }
         .editing-mode { border: 2px solid #0d6efd; background-color: #f0f7ff; }
+        
         .drop-zone {
-            border: 2px dashed #0d6efd; border-radius: 10px; padding: 40px; text-align: center; background-color: #f8f9fa;
+            border: 2px dashed #0d6efd; border-radius: 10px; padding: 30px; text-align: center; background-color: #f8f9fa;
             transition: all 0.3s ease; cursor: pointer; margin-bottom: 15px;
         }
         .drop-zone:hover, .drop-zone.dragover { background-color: #e7f1ff; border-color: #0b5ed7; transform: scale(1.01); }
         .drop-zone p { margin: 0; color: #495057; font-weight: bold; font-size: 1.1rem; }
-        .drop-icon { font-size: 2.5rem; color: #0d6efd; margin-bottom: 15px; }
+        .drop-icon { font-size: 2.5rem; color: #0d6efd; margin-bottom: 10px; }
+        .info-text { font-size: 0.85rem; color: #6c757d; }
     </style>
 </head>
 <body>
@@ -32,8 +34,8 @@
     <div class="header">
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
-                <h4 class="m-0">📊 SH Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 14.0: 쿠팡 상품명+옵션 완벽 결합</small>
+                <h4 class="m-0">📊 SJ Innovation 통합 매출 시스템</h4>
+                <small class="text-light opacity-75">Ver 15.0: 금액/수량/날짜 완벽 보정</small>
             </div>
             <div>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
@@ -71,8 +73,8 @@
                 
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
                     <div class="drop-icon">📂 📂 📂</div>
-                    <p>여러 엑셀 파일을 여기에 드래그하세요!</p>
-                    <small class="text-primary fw-bold mt-2 d-block">쿠팡 상품명(옵션포함) 완벽 인식 & 수량 자동 계산</small>
+                    <p>이곳에 엑셀 파일을 드래그하세요.</p>
+                    <p class="info-text mt-2">※ 주의: 아래 <b>[수집일]</b> 날짜로 저장됩니다. 날짜를 먼저 확인하세요!</p>
                     <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
 
@@ -84,7 +86,7 @@
                     
                     <div class="row g-2">
                         <div class="col-md-2">
-                            <label class="form-label">수집일</label>
+                            <label class="form-label text-danger">수집일 (기준일자)</label>
                             <input type="date" class="form-control form-control-sm" id="db-date">
                         </div>
                         <div class="col-md-2">
@@ -210,10 +212,8 @@
         const CHANNELS = ['쿠팡 윙', '쿠팡 로켓배송', '쿠팡 로켓그로스', '스마트스토어', '지마켓', '11번가', '(SH)쿠팡 윙'];
         let TARGETS = {'쿠팡 윙': 10000000, '쿠팡 로켓그로스': 24000000, '스마트스토어': 3000000};
         
-        // 상품명 매칭 룰 (브레인롯 포함)
         const MATCHING_RULES = [
             { target: "브레인롯 랜덤딱지 파우치", keywords: ["브레인롯"] },
-            
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2개"] },
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2입"] },
             { target: "캐치티니핑 시즌3 마스크 소형XS 하츄핑", keywords: ["마스크", "하츄핑"] },
@@ -257,7 +257,6 @@
                 option.value = p;
                 datalist.appendChild(option);
             });
-            
             setupDropZone();
             refreshAll();
         };
@@ -284,11 +283,19 @@
             return rawName;
         }
 
+        // --- 금액 쉼표 제거 (핵심: 0원 방지) ---
+        function parseMoney(val) {
+            if (!val) return 0;
+            // 문자열로 변환 후 쉼표 제거
+            const clean = String(val).replace(/,/g, '').trim();
+            return Number(clean) || 0;
+        }
+
+        // --- 판매수량 자동 계산 (25팩 등) ---
         function calculateRealSalesQty(rawName, excelQty) {
             if (!rawName) return excelQty;
             const regex = /(\d+)\s*(팩|개|set|세트|box|박스)(?!입)/i;
             const match = rawName.match(regex);
-            
             if (match) {
                 const multiplier = parseInt(match[1]);
                 if (multiplier > 0) return excelQty * multiplier;
@@ -298,23 +305,23 @@
 
         async function handleExcelUpload(files) {
             if(files.length === 0) return;
+            // *** 중요: 입력창에 있는 날짜를 사용 (파일 날짜 X) ***
+            const targetDate = document.getElementById('db-date').value;
+            if(!targetDate) { alert('먼저 [수집일] 날짜를 선택해주세요!'); return; }
+
             let totalSuccess = 0;
             let totalFiles = files.length;
 
             for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const fileDate = new Date(file.lastModified);
-                const dateStr = fileDate.toISOString().substring(0,10);
-
                 try {
-                    const count = await processSingleFile(file, dateStr);
+                    const count = await processSingleFile(files[i], targetDate);
                     totalSuccess += count;
-                } catch (e) { console.error(`${file.name} 오류:`, e); }
+                } catch (e) { console.error(`${files[i].name} 오류:`, e); }
             }
 
             saveToStorage();
             refreshAll();
-            alert(`총 ${totalFiles}개 파일 처리 완료!\n✅ ${totalSuccess}건 등록 성공`);
+            alert(`총 ${totalFiles}개 파일 처리 완료!\n✅ 총 ${totalSuccess}건 등록됨\n📅 기준일: ${targetDate}`);
             document.getElementById('excelUpload').value = '';
         }
 
@@ -359,20 +366,21 @@
                                 newOrder.mall = '스마트스토어';
                                 newOrder.rawId = row[colMap['상품주문번호']];
                                 rawProductName = row[colMap['상품명']] + (row[colMap['옵션정보']] ? ' ' + row[colMap['옵션정보']] : '');
-                                newOrder.amount = Number(row[colMap['최종 상품별 총 주문금액']] || row[colMap['상품가격']] || 0);
+                                // *** 금액 쉼표 제거 적용 ***
+                                newOrder.amount = parseMoney(row[colMap['최종 상품별 총 주문금액']] || row[colMap['상품가격']]);
                                 excelQty = Number(row[colMap['수량']] || 1);
                                 newOrder.receiver = row[colMap['수취인명']];
                             } else if (platform === 'COUPANG') {
                                 if(!row[colMap['주문번호']]) continue;
                                 newOrder.mall = '쿠팡 윙';
                                 newOrder.rawId = row[colMap['주문번호']];
-                                // *** 중요: 등록상품명 + 등록옵션명 결합 ***
+                                // *** 쿠팡 상품명+옵션명 결합 ***
                                 rawProductName = (row[colMap['등록상품명']] || '') + ' ' + (row[colMap['등록옵션명']] || '');
                                 if(rawProductName.trim() === '') rawProductName = row[colMap['노출상품명(옵션명)']] || row[colMap['노출상품명']] || '';
                                 
-                                let price = Number(row[colMap['결제액']]);
-                                if(!price) price = Number(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]);
-                                newOrder.amount = price || 0;
+                                let price = parseMoney(row[colMap['결제액']]);
+                                if(!price) price = parseMoney(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]);
+                                newOrder.amount = price;
                                 excelQty = Number(row[colMap['구매수(수량)']] || 1);
                                 newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
                             } else if (platform === 'GMARKET') {
@@ -380,7 +388,7 @@
                                 newOrder.mall = '지마켓';
                                 newOrder.rawId = row[colMap['주문번호']];
                                 rawProductName = row[colMap['상품명']];
-                                newOrder.amount = Number(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']]) || 0);
+                                newOrder.amount = parseMoney(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']]));
                                 excelQty = Number(row[colMap['수량']] || 1);
                                 newOrder.receiver = row[colMap['수령인명']];
                             } else if (platform === 'EBOT') {
@@ -388,7 +396,7 @@
                                 newOrder.mall = row[colMap['주문번호']] === '쿠팡윙' ? '쿠팡 윙' : row[colMap['주문번호']];
                                 newOrder.rawId = row[colMap['송장번호']] || row[colMap['주문번호']];
                                 rawProductName = row[colMap['상품명']] + (row[colMap['옵션명']] ? ' ' + row[colMap['옵션명']] : '');
-                                newOrder.amount = Number(row[colMap['판매금액']] || 0);
+                                newOrder.amount = parseMoney(row[colMap['판매금액']]);
                                 excelQty = Number(row[colMap['수량']] || 1);
                                 newOrder.receiver = row[colMap['수령자']];
                             }
@@ -416,19 +424,24 @@
             for(let i=1; i<=31; i++) html += `<th>${i}일</th>`;
             thead.innerHTML = html;
             tbody.innerHTML = '';
+            
+            let totalRevenue = 0; // 총매출 합계 변수
+
             CHANNELS.forEach(ch => {
-                let total = 0;
+                let rowTotal = 0;
                 let cells = '';
                 for(let i=1; i<=31; i++) {
                     const dt = `2026-01-${String(i).padStart(2,'0')}`;
                     const sum = dbData.filter(d => d.date === dt && d.mall === ch).reduce((a,c) => a+c.amount, 0);
-                    total += sum;
+                    rowTotal += sum;
                     cells += `<td class="text-end">${sum ? sum.toLocaleString() : '-'}</td>`;
                 }
+                totalRevenue += rowTotal;
                 const target = TARGETS[ch] || 0;
-                const rate = target ? (total/target*100).toFixed(1)+'%' : '-';
-                tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${target.toLocaleString()}</td><td class="text-end fw-bold text-primary">${total.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
+                const rate = target ? (rowTotal/target*100).toFixed(1)+'%' : '-';
+                tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${target.toLocaleString()}</td><td class="text-end fw-bold text-primary">${rowTotal.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
             });
+            document.getElementById('total-revenue').innerText = totalRevenue.toLocaleString();
         }
         function renderDB() {
             const tbody = document.getElementById('db-body'); tbody.innerHTML = '';
@@ -473,14 +486,14 @@
         }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sh_sales_v14', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sh_sales_v14'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
+        function saveToStorage() { localStorage.setItem('sh_sales_v15', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sh_sales_v15'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
         function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
         function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
         function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v14')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v14', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v14'); location.reload(); } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v15')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v15', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v15'); location.reload(); } }
     </script>
 </body>
 </html>
