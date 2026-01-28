@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SH Innovation 통합 매출 시스템 (Ver 12.0 - 브레인롯 추가)</title>
+    <title>SH Innovation 통합 매출 시스템 (Ver 13.0 - 팩 단위 인식)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -33,7 +33,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SH Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 12.0: 브레인롯 자동 매칭 + 판매수량 자동계산</small>
+                <small class="text-light opacity-75">Ver 13.0: "25팩" 자동 인식 (판매수량 25개)</small>
             </div>
             <div>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
@@ -72,7 +72,7 @@
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
                     <div class="drop-icon">📂 📂 📂</div>
                     <p>여러 엑셀 파일을 여기에 드래그하세요!</p>
-                    <small class="text-primary fw-bold mt-2 d-block">"브레인롯" 상품 자동 인식 & 묶음 수량 자동 계산</small>
+                    <small class="text-primary fw-bold mt-2 d-block">"25팩" -> 판매수량 25개로 자동 변환됩니다.</small>
                     <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
 
@@ -212,7 +212,7 @@
         
         // 상품명 매칭 룰 (브레인롯 추가됨)
         const MATCHING_RULES = [
-            { target: "브레인롯 랜덤딱지 파우치", keywords: ["브레인롯"] },
+            { target: "브레인롯 랜덤딱지 파우치", keywords: ["브레인롯"] }, // 최우선 매칭
             
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2개"] },
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2입"] },
@@ -285,10 +285,12 @@
             return rawName;
         }
 
-        // --- 판매수량 자동 계산 ---
+        // --- 판매수량 자동 계산 (팩, 개, set, box) ---
         function calculateRealSalesQty(rawName, excelQty) {
             if (!rawName) return excelQty;
-            const regex = /(\d+)\s*(개|set|세트|box|박스)(?!입)/i;
+            // "25팩", "5개", "10set" 등 인식 (단, "입"으로 끝나는 건 제외 e.g. 2개입)
+            // 김선우 건: "25팩" -> 25 인식 성공
+            const regex = /(\d+)\s*(팩|개|set|세트|box|박스)(?!입)/i;
             const match = rawName.match(regex);
             
             if (match) {
@@ -392,8 +394,13 @@
                                 newOrder.receiver = row[colMap['수령자']];
                             }
 
+                            // 1. 상품명 정규화
                             newOrder.product = normalizeProductName(rawProductName);
+                            
+                            // 2. 택배수량 1 고정
                             newOrder.deliveryQty = 1; 
+                            
+                            // 3. 판매수량 자동 계산 ("25팩" -> 25)
                             newOrder.salesQty = calculateRealSalesQty(rawProductName, excelQty);
 
                             if(!dbData.some(d => d.rawId == newOrder.rawId)) {
@@ -472,14 +479,14 @@
         }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sh_sales_v12', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sh_sales_v12'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
+        function saveToStorage() { localStorage.setItem('sh_sales_v13', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sh_sales_v13'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
         function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
         function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
         function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v12')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v12', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v12'); location.reload(); } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v13')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v13', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v13'); location.reload(); } }
     </script>
 </body>
 </html>
