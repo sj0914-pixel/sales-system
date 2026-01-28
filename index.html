@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SH Innovation 통합 매출 시스템 (Ver 8.0 - 드래그앤드롭)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; font-size: 0.85rem; }
+        .header { background-color: #2c3e50; color: white; padding: 15px; margin-bottom: 15px; }
+        .nav-tabs .nav-link.active { font-weight: bold; border-top: 3px solid #0d6efd; }
+        .table-responsive { overflow-x: auto; white-space: nowrap; }
+        .table th { background-color: #e9ecef; vertical-align: middle; text-align: center; white-space: nowrap; }
+        .table td { vertical-align: middle; padding: 4px 8px; white-space: nowrap; }
+        .negative { color: red; font-weight: bold; }
+        .input-area { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; border: 1px solid #dee2e6; }
+        .form-label { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; color: #495057; }
+        .sticky-col { position: sticky; left: 0; background-color: white; z-index: 1; }
+        .editing-mode { border: 2px solid #0d6efd; background-color: #f0f7ff; }
+        
+        /* 드래그 앤 드롭 영역 스타일 */
+        .drop-zone {
+            border: 2px dashed #0d6efd;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            background-color: #e7f1ff;
+            border-color: #0b5ed7;
+        }
+        .drop-zone p { margin: 0; color: #6c757d; font-weight: bold; }
+        .drop-icon { font-size: 2rem; color: #0d6efd; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="m-0">📊 SH Innovation 통합 매출 시스템</h4>
+                <small class="text-light opacity-75">Ver 8.0: 드래그 앤 드롭 지원 + 택배수량 고정</small>
+            </div>
+            <div>
+                <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
+                <button class="btn btn-outline-light btn-sm" onclick="document.getElementById('backupInput').click()">📂 백업 복원</button>
+                <input type="file" id="backupInput" style="display:none" onchange="loadDataFromBackup(this)">
+                <button class="btn btn-danger btn-sm ms-2" onclick="resetData()"> 초기화</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item"><button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button">📈 대시보드</button></li>
+            <li class="nav-item"><button class="nav-link" id="db-tab" data-bs-toggle="tab" data-bs-target="#db" type="button">📝 매출 등록 (DB)</button></li>
+            <li class="nav-item"><button class="nav-link" id="ads-tab" data-bs-toggle="tab" data-bs-target="#ads" type="button">📢 광고 관리</button></li>
+            <li class="nav-item"><button class="nav-link" id="settlement-tab" data-bs-toggle="tab" data-bs-target="#settlement" type="button">💰 정산 관리</button></li>
+        </ul>
+
+        <div class="tab-content p-3 bg-white border border-top-0 rounded-bottom shadow-sm">
+            
+            <div class="tab-pane fade show active" id="dashboard">
+                <div class="d-flex justify-content-between mb-2">
+                    <h5>📅 2026년 1월 매출 현황</h5>
+                    <span class="badge bg-primary fs-6">총 매출: <span id="total-revenue">0</span>원</span>
+                </div>
+                <div class="table-responsive" style="height: 75vh;">
+                    <table class="table table-bordered table-hover table-sm table-striped">
+                        <thead><tr id="date-header"></tr></thead>
+                        <tbody id="dashboard-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="db">
+                
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
+                    <div class="drop-icon">📂</div>
+                    <p>여기에 엑셀 파일을 드래그해서 놓거나 클릭하세요.</p>
+                    <small class="text-muted">(지원: 쿠팡, 스마트스토어, 지마켓, 이벗 파일)</small>
+                    <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" onchange="handleExcelUpload(this)">
+                </div>
+
+                <div class="input-area" id="inputFormArea">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                        <h6 class="m-0 text-primary" id="formTitle">✏️ 데이터 입력</h6>
+                        <button class="btn btn-secondary btn-sm" id="cancelEditBtn" style="display:none;" onclick="cancelEdit()">취소</button>
+                    </div>
+                    
+                    <div class="row g-2">
+                        <div class="col-md-2">
+                            <label class="form-label">수집일</label>
+                            <input type="date" class="form-control form-control-sm" id="db-date">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">쇼핑몰이름</label>
+                            <select class="form-select form-select-sm" id="db-mall">
+                                <option value="쿠팡 윙">쿠팡 윙</option>
+                                <option value="쿠팡 로켓그로스">쿠팡 로켓그로스</option>
+                                <option value="쿠팡 로켓배송">쿠팡 로켓배송</option>
+                                <option value="스마트스토어">스마트스토어</option>
+                                <option value="지마켓">지마켓</option>
+                                <option value="11번가">11번가</option>
+                                <option value="(SH)쿠팡 윙">(SH)쿠팡 윙</option>
+                                <option value="기타">기타</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">상품명 (자동완성)</label>
+                            <input type="text" class="form-control form-control-sm" id="db-product" list="productOptions" placeholder="상품명 입력">
+                            <datalist id="productOptions"></datalist>
+                        </div>
+                         <div class="col-md-1">
+                            <label class="form-label">택배수량</label>
+                            <input type="number" class="form-control form-control-sm" id="db-delivery-qty" value="1" readonly style="background-color:#e9ecef;">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">결제금액</label>
+                            <input type="number" class="form-control form-control-sm" id="db-amount" placeholder="원">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">판매수량</label>
+                            <input type="number" class="form-control form-control-sm" id="db-sales-qty" value="1">
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-2">
+                            <label class="form-label">수취인명</label>
+                            <input type="text" class="form-control form-control-sm" id="db-receiver">
+                        </div>
+                         <div class="col-md-2">
+                            <label class="form-label">CS구분</label>
+                            <input type="text" class="form-control form-control-sm" id="db-cs-type">
+                        </div>
+                         <div class="col-md-5">
+                            <label class="form-label">CS접수내용</label>
+                            <input type="text" class="form-control form-control-sm" id="db-cs-content">
+                        </div>
+                         <div class="col-md-1">
+                            <label class="form-label">회수여부</label>
+                            <select class="form-select form-select-sm" id="db-return">
+                                <option value="">-</option>
+                                <option value="Y">Y</option>
+                                <option value="N">N</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-primary btn-sm w-100" id="submitBtn" onclick="addOrUpdateSale()">➕ 추가</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-area p-0">
+                    <div class="d-flex justify-content-between p-2 border-bottom bg-light">
+                        <span class="fw-bold">📋 매출 원장 (ID 제외됨)</span>
+                        <span class="small text-muted align-self-center">총 <span id="db-count">0</span>건</span>
+                        <button class="btn btn-xs btn-outline-danger" onclick="clearDB()">전체 삭제</button>
+                    </div>
+                    <div class="table-responsive" style="max-height: 50vh;">
+                        <table class="table table-bordered table-hover mb-0 text-center table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>수집일</th>
+                                    <th>쇼핑몰이름</th>
+                                    <th>상품명</th>
+                                    <th>택배수량</th>
+                                    <th>결제금액</th>
+                                    <th>판매수량</th>
+                                    <th>수취인명</th>
+                                    <th>CS구분</th>
+                                    <th>CS접수내용</th>
+                                    <th>회수여부</th>
+                                    <th>관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="db-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="ads">
+                <div class="input-area">
+                    <h5>📢 채널별 광고 예산</h5>
+                    <table class="table table-bordered table-sm">
+                        <thead><tr class="table-secondary"><th>채널</th><th>유형</th><th>예산</th><th>집행액</th></tr></thead>
+                        <tbody id="ads-budget-body"></tbody>
+                    </table>
+                    <button class="btn btn-primary btn-sm" onclick="saveToStorage()">저장</button>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="settlement">
+                 <div class="input-area">
+                    <h5>💰 월별 정산 현황</h5>
+                    <table class="table table-bordered table-sm">
+                        <thead><tr class="table-secondary"><th>채널</th><th>날짜</th><th>금액</th><th>관리</th></tr></thead>
+                        <tbody id="settlement-body"></tbody>
+                        <tfoot>
+                            <tr>
+                                <td><input type="text" id="set-channel" class="form-control form-control-sm" placeholder="채널"></td>
+                                <td><input type="date" id="set-date" class="form-control form-control-sm"></td>
+                                <td><input type="number" id="set-amount" class="form-control form-control-sm" placeholder="금액"></td>
+                                <td><button class="btn btn-success btn-sm w-100" onclick="addSettlement()">추가</button></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                 </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const CHANNELS = ['쿠팡 윙', '쿠팡 로켓배송', '쿠팡 로켓그로스', '스마트스토어', '지마켓', '11번가', '(SH)쿠팡 윙'];
+        let TARGETS = {'쿠팡 윙': 10000000, '쿠팡 로켓그로스': 24000000, '스마트스토어': 3000000};
+        
+        const PRODUCT_TEMPLATES = [
+            "젠바디 코로나 자가검사키트 / 2개입",
+            "캐치티니핑 시즌3 마스크 소형XS 하츄핑",
+            "슈팅스타 캐치티니핑 무소음 교정젓가락 풀세트-오로라핑",
+            "슈팅스타 캐치티니핑 무소음 교정젓가락 풀세트-왕자핑",
+            "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-빛나핑",
+            "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-초롱핑",
+            "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-반짝핑",
+            "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-왕자핑",
+            "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-오로라핑",
+            "슈팅스타 캐치티니핑 시즌5 / 한글자석플러스",
+            "위시캣 하트 손잡이 / 보틀",
+            "위시캣 안심락 스트랩 / 보틀",
+            "슈팅스타 캐치티니핑 하츄핑-모자목도리",
+            "슈팅스타 캐치티니핑 하츄핑-털목도리",
+            "슈팅스타 캐치티니핑 하츄핑-패딩목도리",
+            "슈팅스타 캐치티니핑 하츄핑-털벙어리장갑",
+            "슈팅스타 캐치티니핑 하츄핑-패딩벙어리장갑",
+            "슈팅스타 캐치티니핑 하츄핑-스키장갑",
+            "슈팅스타 캐치티니핑 하츄핑-베이직손가락장갑",
+            "참존 KF94 톤업핏 블랙라벨 라이트 마스크 중형 25개입-바닐라베이지",
+            "참존 KF94 톤업핏 블랙라벨 라이트 마스크 중형 25개입-무드그레이",
+            "참존 톤업핏 마스크 대형 25개입-코랄",
+            "참존 톤업핏 마스크 대형 25개입-누드업베이지"
+        ];
+
+        let dbData = [], adData = [], settlementData = [];
+        let editingIndex = -1;
+
+        window.onload = function() {
+            loadFromStorage();
+            document.getElementById('db-date').value = new Date().toISOString().substring(0,10);
+            
+            const datalist = document.getElementById('productOptions');
+            PRODUCT_TEMPLATES.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p;
+                datalist.appendChild(option);
+            });
+            
+            setupDropZone();
+            refreshAll();
+        };
+
+        function setupDropZone() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('excelUpload');
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleExcelUpload(fileInput);
+                }
+            });
+        }
+
+        function refreshAll() { renderDashboard(); renderDB(); renderAds(); renderSettlement(); }
+
+        function normalizeProductName(rawName) {
+            if(!rawName) return "";
+            for (let template of PRODUCT_TEMPLATES) {
+                if(template.includes("젠바디") && rawName.includes("젠바디") && rawName.includes("2개")) return template;
+                if(template.includes("모자목도리") && rawName.includes("모자목도리")) return template;
+                if(template.includes("털목도리") && rawName.includes("털목도리")) return template;
+                if(template.includes("패딩목도리") && rawName.includes("패딩목도리")) return template;
+                if(template.includes("털벙어리") && rawName.includes("털벙어리")) return template;
+                if(template.includes("패딩벙어리") && rawName.includes("패딩벙어리")) return template;
+                if(template.includes("스키장갑") && rawName.includes("스키장갑")) return template;
+                if(template.includes("베이직손가락") && rawName.includes("베이직손가락")) return template;
+                if(template.includes("교정젓가락") && template.includes("오로라핑") && rawName.includes("오로라핑")) return template;
+                if(template.includes("교정젓가락") && template.includes("왕자핑") && rawName.includes("왕자핑")) return template;
+                if(template.includes("교정젓가락") && template.includes("빛나핑") && rawName.includes("빛나핑")) return template;
+                if(template.includes("교정젓가락") && template.includes("초롱핑") && rawName.includes("초롱핑")) return template;
+                if(template.includes("교정젓가락") && template.includes("반짝핑") && rawName.includes("반짝핑")) return template;
+                if(template.includes("보틀") && template.includes("손잡이") && rawName.includes("손잡이")) return template;
+                if(template.includes("보틀") && template.includes("스트랩") && rawName.includes("스트랩")) return template;
+                if(template.includes("바닐라베이지") && rawName.includes("바닐라베이지")) return template;
+                if(template.includes("무드그레이") && rawName.includes("무드그레이")) return template;
+                if(template.includes("코랄") && rawName.includes("코랄")) return template;
+                if(template.includes("누드업베이지") && rawName.includes("누드업베이지")) return template;
+                if(template.includes("한글자석") && rawName.includes("한글자석")) return template;
+                if(template.includes("마스크 소형") && rawName.includes("소형")) return template;
+            }
+            return rawName;
+        }
+
+        function handleExcelUpload(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+
+                if(jsonData.length < 1) { alert('데이터가 없습니다.'); return; }
+
+                let headerRow = -1;
+                let platform = 'UNKNOWN';
+                let colMap = {};
+
+                for(let r=0; r<Math.min(5, jsonData.length); r++) {
+                    const rowStr = JSON.stringify(jsonData[r]);
+                    if(rowStr.includes('상품주문번호') && rowStr.includes('주문 유입경로')) {
+                        headerRow = r; platform = 'SMARTSTORE'; break;
+                    } else if(rowStr.includes('등록상품명') && rowStr.includes('노출상품명')) {
+                        headerRow = r; platform = 'COUPANG'; break;
+                    } else if(rowStr.includes('판매아이디') && rowStr.includes('발송마감일')) {
+                        headerRow = r; platform = 'GMARKET'; break;
+                    } else if(rowStr.includes('주문번호') && rowStr.includes('옵션명')) {
+                        headerRow = r; platform = 'EBOT'; break; 
+                    }
+                }
+
+                if(headerRow === -1) { alert('알 수 없는 양식입니다.'); return; }
+                jsonData[headerRow].forEach((col, idx) => { if(col) colMap[col.trim()] = idx; });
+                
+                let successCount = 0;
+                const today = new Date().toISOString().substring(0,10);
+
+                for(let i = headerRow + 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if(!row || row.length === 0) continue;
+
+                    let newOrder = {
+                        date: today, mall: '', product: '', deliveryQty: 1, amount: 0,
+                        salesQty: 1, receiver: '', csType: '', csContent: '', returnStatus: '', rawId: ''
+                    };
+                    
+                    let rawProductName = "";
+
+                    if(platform === 'SMARTSTORE') {
+                        if(!row[colMap['상품주문번호']]) continue;
+                        newOrder.mall = '스마트스토어';
+                        newOrder.rawId = row[colMap['상품주문번호']];
+                        rawProductName = row[colMap['상품명']] + (row[colMap['옵션정보']] ? ' ' + row[colMap['옵션정보']] : '');
+                        newOrder.amount = Number(row[colMap['최종 상품별 총 주문금액']] || row[colMap['상품가격']] || 0);
+                        newOrder.salesQty = Number(row[colMap['수량']] || 1);
+                        newOrder.receiver = row[colMap['수취인명']];
+
+                    } else if (platform === 'COUPANG') {
+                        if(!row[colMap['주문번호']]) continue;
+                        newOrder.mall = '쿠팡 윙';
+                        newOrder.rawId = row[colMap['주문번호']];
+                        rawProductName = row[colMap['등록상품명']] || row[colMap['노출상품명']];
+                        let price = Number(row[colMap['결제액']]);
+                        if(!price) price = Number(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]);
+                        newOrder.amount = price || 0;
+                        newOrder.salesQty = Number(row[colMap['구매수(수량)']] || 1);
+                        newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
+
+                    } else if (platform === 'GMARKET') {
+                        if(!row[colMap['주문번호']]) continue;
+                        newOrder.mall = '지마켓';
+                        newOrder.rawId = row[colMap['주문번호']];
+                        rawProductName = row[colMap['상품명']];
+                        newOrder.amount = Number(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']]) || 0);
+                        newOrder.salesQty = Number(row[colMap['수량']] || 1);
+                        newOrder.receiver = row[colMap['수령인명']];
+                    
+                    } else if (platform === 'EBOT') {
+                        if(!row[colMap['주문번호']]) continue;
+                        newOrder.mall = row[colMap['주문번호']] === '쿠팡윙' ? '쿠팡 윙' : row[colMap['주문번호']];
+                        newOrder.rawId = row[colMap['송장번호']] || row[colMap['주문번호']];
+                        rawProductName = row[colMap['상품명']] + (row[colMap['옵션명']] ? ' ' + row[colMap['옵션명']] : '');
+                        newOrder.amount = Number(row[colMap['판매금액']] || 0);
+                        newOrder.salesQty = Number(row[colMap['수량']] || 1);
+                        newOrder.receiver = row[colMap['수령자']];
+                    }
+
+                    newOrder.product = normalizeProductName(rawProductName);
+                    
+                    // 핵심: 택배수량은 무조건 1로 고정
+                    newOrder.deliveryQty = 1;
+
+                    const exists = dbData.some(d => d.rawId == newOrder.rawId);
+                    if(!exists) {
+                        dbData.push(newOrder);
+                        successCount++;
+                    }
+                }
+
+                saveToStorage();
+                refreshAll();
+                alert(`[${platform}] ${successCount}건 등록 및 상품명 변환 완료!`);
+                input.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function renderDashboard() {
+            const thead = document.getElementById('date-header');
+            const tbody = document.getElementById('dashboard-body');
+            let html = '<th class="bg-light sticky-col">채널</th><th class="bg-light">목표</th><th class="bg-light">합계</th><th class="bg-light">달성률</th>';
+            for(let i=1; i<=31; i++) html += `<th>${i}일</th>`;
+            thead.innerHTML = html;
+            tbody.innerHTML = '';
+
+            CHANNELS.forEach(ch => {
+                let total = 0;
+                let cells = '';
+                for(let i=1; i<=31; i++) {
+                    const dt = `2026-01-${String(i).padStart(2,'0')}`;
+                    const sum = dbData.filter(d => d.date === dt && d.mall === ch).reduce((a,c) => a+c.amount, 0);
+                    total += sum;
+                    cells += `<td class="text-end">${sum ? sum.toLocaleString() : '-'}</td>`;
+                }
+                const target = TARGETS[ch] || 0;
+                const rate = target ? (total/target*100).toFixed(1)+'%' : '-';
+                tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${target.toLocaleString()}</td><td class="text-end fw-bold text-primary">${total.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
+            });
+        }
+
+        function renderDB() {
+            const tbody = document.getElementById('db-body');
+            tbody.innerHTML = '';
+            const indexedData = dbData.map((item, idx) => ({...item, originalIndex: idx}));
+            indexedData.sort((a,b) => new Date(b.date) - new Date(a.date));
+            
+            indexedData.forEach((item) => {
+                tbody.innerHTML += `<tr>
+                    <td>${item.date}</td>
+                    <td>${item.mall}</td>
+                    <td class="text-start">${item.product}</td>
+                    <td>${item.deliveryQty}</td>
+                    <td class="text-end fw-bold">${item.amount.toLocaleString()}</td>
+                    <td>${item.salesQty}</td>
+                    <td>${item.receiver}</td>
+                    <td>${item.csType || ''}</td>
+                    <td>${item.csContent || ''}</td>
+                    <td>${item.returnStatus || ''}</td>
+                    <td>
+                        <button class="btn btn-xs btn-outline-primary py-0 me-1" onclick="editSale(${item.originalIndex})">수정</button>
+                        <button class="btn btn-xs btn-outline-danger py-0" onclick="deleteDB(${item.originalIndex})">삭제</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById('db-count').innerText = dbData.length;
+        }
+
+        function editSale(index) {
+            editingIndex = index;
+            const item = dbData[index];
+            document.getElementById('db-date').value = item.date;
+            document.getElementById('db-mall').value = item.mall;
+            document.getElementById('db-product').value = item.product;
+            document.getElementById('db-amount').value = item.amount;
+            document.getElementById('db-sales-qty').value = item.salesQty;
+            document.getElementById('db-receiver').value = item.receiver;
+            document.getElementById('db-cs-type').value = item.csType || '';
+            document.getElementById('db-cs-content').value = item.csContent || '';
+            document.getElementById('db-return').value = item.returnStatus || '';
+
+            document.getElementById('formTitle').innerText = "✏️ 데이터 수정 중...";
+            document.getElementById('submitBtn').innerText = "💾 수정 완료";
+            document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-success');
+            document.getElementById('cancelEditBtn').style.display = 'block';
+            document.getElementById('inputFormArea').classList.add('editing-mode');
+            document.getElementById('inputFormArea').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            editingIndex = -1;
+            document.getElementById('db-product').value = '';
+            document.getElementById('db-amount').value = '';
+            document.getElementById('db-receiver').value = '';
+            document.getElementById('db-cs-type').value = '';
+            document.getElementById('db-cs-content').value = '';
+            document.getElementById('db-return').value = '';
+            document.getElementById('formTitle').innerText = "✏️ 데이터 입력";
+            document.getElementById('submitBtn').innerText = "➕ 추가";
+            document.getElementById('submitBtn').classList.replace('btn-success', 'btn-primary');
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('inputFormArea').classList.remove('editing-mode');
+        }
+
+        function addOrUpdateSale() {
+            const date = document.getElementById('db-date').value;
+            const amount = document.getElementById('db-amount').value;
+            if(!date || !amount) return alert('날짜와 금액은 필수입니다.');
+
+            const newItem = {
+                date: date,
+                mall: document.getElementById('db-mall').value,
+                product: document.getElementById('db-product').value,
+                deliveryQty: 1, // 수동 입력 시에도 택배수량 1 고정
+                amount: Number(amount),
+                salesQty: Number(document.getElementById('db-sales-qty').value),
+                receiver: document.getElementById('db-receiver').value,
+                csType: document.getElementById('db-cs-type').value,
+                csContent: document.getElementById('db-cs-content').value,
+                returnStatus: document.getElementById('db-return').value,
+                rawId: editingIndex > -1 ? dbData[editingIndex].rawId : ('MANUAL-'+Date.now())
+            };
+
+            if(editingIndex > -1) {
+                dbData[editingIndex] = newItem;
+                alert('수정되었습니다.');
+                cancelEdit();
+            } else {
+                dbData.push(newItem);
+                document.getElementById('db-product').value = '';
+                document.getElementById('db-amount').value = '';
+            }
+
+            saveToStorage();
+            refreshAll();
+        }
+
+        function deleteDB(idx) {
+            if(confirm('정말 삭제하시겠습니까?')) {
+                dbData.splice(idx, 1);
+                saveToStorage();
+                refreshAll();
+            }
+        }
+        function clearDB() { if(confirm('전체 삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
+
+        function saveToStorage() { localStorage.setItem('sh_sales_v8', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function loadFromStorage() {
+            const saved = localStorage.getItem('sh_sales_v8');
+            if(saved) { const p=JSON.parse(saved); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; }
+            else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; }
+        }
+
+        function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
+        function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
+        function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v8')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v8', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v8'); location.reload(); } }
+    </script>
+</body>
+</html>
