@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SH Innovation 통합 매출 시스템 (Ver 8.0 - 드래그앤드롭)</title>
+    <title>SH Innovation 통합 매출 시스템 (Ver 9.0)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -23,7 +23,7 @@
         .drop-zone {
             border: 2px dashed #0d6efd;
             border-radius: 10px;
-            padding: 30px;
+            padding: 40px;
             text-align: center;
             background-color: #f8f9fa;
             transition: all 0.3s ease;
@@ -33,9 +33,10 @@
         .drop-zone:hover, .drop-zone.dragover {
             background-color: #e7f1ff;
             border-color: #0b5ed7;
+            transform: scale(1.01);
         }
-        .drop-zone p { margin: 0; color: #6c757d; font-weight: bold; }
-        .drop-icon { font-size: 2rem; color: #0d6efd; margin-bottom: 10px; }
+        .drop-zone p { margin: 0; color: #495057; font-weight: bold; font-size: 1.1rem; }
+        .drop-icon { font-size: 2.5rem; color: #0d6efd; margin-bottom: 15px; }
     </style>
 </head>
 <body>
@@ -44,7 +45,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SH Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 8.0: 드래그 앤 드롭 지원 + 택배수량 고정</small>
+                <small class="text-light opacity-75">Ver 9.0: 다중 파일 동시 업로드 + 날짜 자동 인식</small>
             </div>
             <div>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
@@ -81,10 +82,11 @@
             <div class="tab-pane fade" id="db">
                 
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
-                    <div class="drop-icon">📂</div>
-                    <p>여기에 엑셀 파일을 드래그해서 놓거나 클릭하세요.</p>
-                    <small class="text-muted">(지원: 쿠팡, 스마트스토어, 지마켓, 이벗 파일)</small>
-                    <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" onchange="handleExcelUpload(this)">
+                    <div class="drop-icon">📂 📂 📂</div>
+                    <p>여러 개의 엑셀 파일을 한 번에 드래그하세요!</p>
+                    <small class="text-muted d-block mt-2">쿠팡, 스마트스토어, 지마켓 파일을 동시에 올려도 됩니다.</small>
+                    <small class="text-primary fw-bold mt-1 d-block">* 수집일은 각 파일의 '수정 날짜'로 자동 설정됩니다.</small>
+                    <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
 
                 <div class="input-area" id="inputFormArea">
@@ -268,8 +270,7 @@
 
         function setupDropZone() {
             const dropZone = document.getElementById('dropZone');
-            const fileInput = document.getElementById('excelUpload');
-
+            
             dropZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 dropZone.classList.add('dragover');
@@ -282,9 +283,9 @@
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropZone.classList.remove('dragover');
+                // 드래그된 파일이 여러 개일 수 있음
                 if (e.dataTransfer.files.length) {
-                    fileInput.files = e.dataTransfer.files;
-                    handleExcelUpload(fileInput);
+                    handleExcelUpload(e.dataTransfer.files);
                 }
             });
         }
@@ -319,111 +320,144 @@
             return rawName;
         }
 
-        function handleExcelUpload(input) {
-            const file = input.files[0];
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+        // --- 다중 파일 처리 함수 ---
+        async function handleExcelUpload(files) {
+            if(files.length === 0) return;
 
-                if(jsonData.length < 1) { alert('데이터가 없습니다.'); return; }
+            let totalSuccess = 0;
+            let totalFiles = files.length;
 
-                let headerRow = -1;
-                let platform = 'UNKNOWN';
-                let colMap = {};
-
-                for(let r=0; r<Math.min(5, jsonData.length); r++) {
-                    const rowStr = JSON.stringify(jsonData[r]);
-                    if(rowStr.includes('상품주문번호') && rowStr.includes('주문 유입경로')) {
-                        headerRow = r; platform = 'SMARTSTORE'; break;
-                    } else if(rowStr.includes('등록상품명') && rowStr.includes('노출상품명')) {
-                        headerRow = r; platform = 'COUPANG'; break;
-                    } else if(rowStr.includes('판매아이디') && rowStr.includes('발송마감일')) {
-                        headerRow = r; platform = 'GMARKET'; break;
-                    } else if(rowStr.includes('주문번호') && rowStr.includes('옵션명')) {
-                        headerRow = r; platform = 'EBOT'; break; 
-                    }
-                }
-
-                if(headerRow === -1) { alert('알 수 없는 양식입니다.'); return; }
-                jsonData[headerRow].forEach((col, idx) => { if(col) colMap[col.trim()] = idx; });
+            // 여러 파일을 순차적으로 처리
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
                 
-                let successCount = 0;
-                const today = new Date().toISOString().substring(0,10);
+                // 파일의 수정 날짜(lastModified) 가져오기 -> 수집일로 사용
+                const fileDate = new Date(file.lastModified);
+                const dateStr = fileDate.toISOString().substring(0,10); // YYYY-MM-DD
 
-                for(let i = headerRow + 1; i < jsonData.length; i++) {
-                    const row = jsonData[i];
-                    if(!row || row.length === 0) continue;
-
-                    let newOrder = {
-                        date: today, mall: '', product: '', deliveryQty: 1, amount: 0,
-                        salesQty: 1, receiver: '', csType: '', csContent: '', returnStatus: '', rawId: ''
-                    };
-                    
-                    let rawProductName = "";
-
-                    if(platform === 'SMARTSTORE') {
-                        if(!row[colMap['상품주문번호']]) continue;
-                        newOrder.mall = '스마트스토어';
-                        newOrder.rawId = row[colMap['상품주문번호']];
-                        rawProductName = row[colMap['상품명']] + (row[colMap['옵션정보']] ? ' ' + row[colMap['옵션정보']] : '');
-                        newOrder.amount = Number(row[colMap['최종 상품별 총 주문금액']] || row[colMap['상품가격']] || 0);
-                        newOrder.salesQty = Number(row[colMap['수량']] || 1);
-                        newOrder.receiver = row[colMap['수취인명']];
-
-                    } else if (platform === 'COUPANG') {
-                        if(!row[colMap['주문번호']]) continue;
-                        newOrder.mall = '쿠팡 윙';
-                        newOrder.rawId = row[colMap['주문번호']];
-                        rawProductName = row[colMap['등록상품명']] || row[colMap['노출상품명']];
-                        let price = Number(row[colMap['결제액']]);
-                        if(!price) price = Number(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]);
-                        newOrder.amount = price || 0;
-                        newOrder.salesQty = Number(row[colMap['구매수(수량)']] || 1);
-                        newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
-
-                    } else if (platform === 'GMARKET') {
-                        if(!row[colMap['주문번호']]) continue;
-                        newOrder.mall = '지마켓';
-                        newOrder.rawId = row[colMap['주문번호']];
-                        rawProductName = row[colMap['상품명']];
-                        newOrder.amount = Number(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']]) || 0);
-                        newOrder.salesQty = Number(row[colMap['수량']] || 1);
-                        newOrder.receiver = row[colMap['수령인명']];
-                    
-                    } else if (platform === 'EBOT') {
-                        if(!row[colMap['주문번호']]) continue;
-                        newOrder.mall = row[colMap['주문번호']] === '쿠팡윙' ? '쿠팡 윙' : row[colMap['주문번호']];
-                        newOrder.rawId = row[colMap['송장번호']] || row[colMap['주문번호']];
-                        rawProductName = row[colMap['상품명']] + (row[colMap['옵션명']] ? ' ' + row[colMap['옵션명']] : '');
-                        newOrder.amount = Number(row[colMap['판매금액']] || 0);
-                        newOrder.salesQty = Number(row[colMap['수량']] || 1);
-                        newOrder.receiver = row[colMap['수령자']];
-                    }
-
-                    newOrder.product = normalizeProductName(rawProductName);
-                    
-                    // 핵심: 택배수량은 무조건 1로 고정
-                    newOrder.deliveryQty = 1;
-
-                    const exists = dbData.some(d => d.rawId == newOrder.rawId);
-                    if(!exists) {
-                        dbData.push(newOrder);
-                        successCount++;
-                    }
+                try {
+                    const count = await processSingleFile(file, dateStr);
+                    totalSuccess += count;
+                } catch (e) {
+                    console.error(`${file.name} 처리 중 오류:`, e);
                 }
+            }
 
-                saveToStorage();
-                refreshAll();
-                alert(`[${platform}] ${successCount}건 등록 및 상품명 변환 완료!`);
-                input.value = '';
-            };
-            reader.readAsArrayBuffer(file);
+            saveToStorage();
+            refreshAll();
+            alert(`총 ${totalFiles}개 파일 처리 완료!\n✅ 총 ${totalSuccess}건의 주문이 등록되었습니다.`);
+            
+            // 파일 input 초기화 (같은 파일 다시 올릴 때를 위해)
+            document.getElementById('excelUpload').value = '';
         }
 
+        // --- 단일 파일 처리 로직 (Promise 반환) ---
+        function processSingleFile(file, dateStr) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+
+                        if(jsonData.length < 1) { resolve(0); return; }
+
+                        let headerRow = -1;
+                        let platform = 'UNKNOWN';
+                        let colMap = {};
+
+                        // 헤더 및 플랫폼 식별
+                        for(let r=0; r<Math.min(5, jsonData.length); r++) {
+                            const rowStr = JSON.stringify(jsonData[r]);
+                            if(rowStr.includes('상품주문번호') && rowStr.includes('주문 유입경로')) {
+                                headerRow = r; platform = 'SMARTSTORE'; break;
+                            } else if(rowStr.includes('등록상품명') && rowStr.includes('노출상품명')) {
+                                headerRow = r; platform = 'COUPANG'; break;
+                            } else if(rowStr.includes('판매아이디') && rowStr.includes('발송마감일')) {
+                                headerRow = r; platform = 'GMARKET'; break;
+                            } else if(rowStr.includes('주문번호') && rowStr.includes('옵션명')) {
+                                headerRow = r; platform = 'EBOT'; break; 
+                            }
+                        }
+
+                        if(headerRow === -1) { resolve(0); return; } // 알 수 없는 파일은 스킵
+
+                        jsonData[headerRow].forEach((col, idx) => { if(col) colMap[col.trim()] = idx; });
+                        
+                        let successCount = 0;
+
+                        for(let i = headerRow + 1; i < jsonData.length; i++) {
+                            const row = jsonData[i];
+                            if(!row || row.length === 0) continue;
+
+                            let newOrder = {
+                                date: dateStr, // *** 파일 수정 날짜 적용 ***
+                                mall: '', product: '', deliveryQty: 1, amount: 0,
+                                salesQty: 1, receiver: '', csType: '', csContent: '', returnStatus: '', rawId: ''
+                            };
+                            
+                            let rawProductName = "";
+
+                            if(platform === 'SMARTSTORE') {
+                                if(!row[colMap['상품주문번호']]) continue;
+                                newOrder.mall = '스마트스토어';
+                                newOrder.rawId = row[colMap['상품주문번호']];
+                                rawProductName = row[colMap['상품명']] + (row[colMap['옵션정보']] ? ' ' + row[colMap['옵션정보']] : '');
+                                newOrder.amount = Number(row[colMap['최종 상품별 총 주문금액']] || row[colMap['상품가격']] || 0);
+                                newOrder.salesQty = Number(row[colMap['수량']] || 1);
+                                newOrder.receiver = row[colMap['수취인명']];
+
+                            } else if (platform === 'COUPANG') {
+                                if(!row[colMap['주문번호']]) continue;
+                                newOrder.mall = '쿠팡 윙';
+                                newOrder.rawId = row[colMap['주문번호']];
+                                rawProductName = row[colMap['등록상품명']] || row[colMap['노출상품명']];
+                                let price = Number(row[colMap['결제액']]);
+                                if(!price) price = Number(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]);
+                                newOrder.amount = price || 0;
+                                newOrder.salesQty = Number(row[colMap['구매수(수량)']] || 1);
+                                newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
+
+                            } else if (platform === 'GMARKET') {
+                                if(!row[colMap['주문번호']]) continue;
+                                newOrder.mall = '지마켓';
+                                newOrder.rawId = row[colMap['주문번호']];
+                                rawProductName = row[colMap['상품명']];
+                                newOrder.amount = Number(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']]) || 0);
+                                newOrder.salesQty = Number(row[colMap['수량']] || 1);
+                                newOrder.receiver = row[colMap['수령인명']];
+                            
+                            } else if (platform === 'EBOT') {
+                                if(!row[colMap['주문번호']]) continue;
+                                newOrder.mall = row[colMap['주문번호']] === '쿠팡윙' ? '쿠팡 윙' : row[colMap['주문번호']];
+                                newOrder.rawId = row[colMap['송장번호']] || row[colMap['주문번호']];
+                                rawProductName = row[colMap['상품명']] + (row[colMap['옵션명']] ? ' ' + row[colMap['옵션명']] : '');
+                                newOrder.amount = Number(row[colMap['판매금액']] || 0);
+                                newOrder.salesQty = Number(row[colMap['수량']] || 1);
+                                newOrder.receiver = row[colMap['수령자']];
+                            }
+
+                            newOrder.product = normalizeProductName(rawProductName);
+                            newOrder.deliveryQty = 1; // *** 택배수량 1 고정 ***
+
+                            const exists = dbData.some(d => d.rawId == newOrder.rawId);
+                            if(!exists) {
+                                dbData.push(newOrder);
+                                successCount++;
+                            }
+                        }
+                        resolve(successCount);
+                    } catch(err) {
+                        reject(err);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- 대시보드 및 렌더링 ---
         function renderDashboard() {
             const thead = document.getElementById('date-header');
             const tbody = document.getElementById('dashboard-body');
@@ -486,7 +520,7 @@
             document.getElementById('db-cs-type').value = item.csType || '';
             document.getElementById('db-cs-content').value = item.csContent || '';
             document.getElementById('db-return').value = item.returnStatus || '';
-
+            // 수정 모드 UI 활성화
             document.getElementById('formTitle').innerText = "✏️ 데이터 수정 중...";
             document.getElementById('submitBtn').innerText = "💾 수정 완료";
             document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-success');
@@ -519,7 +553,7 @@
                 date: date,
                 mall: document.getElementById('db-mall').value,
                 product: document.getElementById('db-product').value,
-                deliveryQty: 1, // 수동 입력 시에도 택배수량 1 고정
+                deliveryQty: 1, // 수동 입력 시에도 택배수량은 1
                 amount: Number(amount),
                 salesQty: Number(document.getElementById('db-sales-qty').value),
                 receiver: document.getElementById('db-receiver').value,
@@ -538,23 +572,16 @@
                 document.getElementById('db-product').value = '';
                 document.getElementById('db-amount').value = '';
             }
-
             saveToStorage();
             refreshAll();
         }
 
-        function deleteDB(idx) {
-            if(confirm('정말 삭제하시겠습니까?')) {
-                dbData.splice(idx, 1);
-                saveToStorage();
-                refreshAll();
-            }
-        }
+        function deleteDB(idx) { if(confirm('정말 삭제하시겠습니까?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체 삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
 
-        function saveToStorage() { localStorage.setItem('sh_sales_v8', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function saveToStorage() { localStorage.setItem('sh_sales_v9', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
         function loadFromStorage() {
-            const saved = localStorage.getItem('sh_sales_v8');
+            const saved = localStorage.getItem('sh_sales_v9');
             if(saved) { const p=JSON.parse(saved); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; }
             else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; }
         }
@@ -562,9 +589,9 @@
         function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
         function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
         function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v8')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v8', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v8'); location.reload(); } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v9')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v9', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v9'); location.reload(); } }
     </script>
 </body>
 </html>
