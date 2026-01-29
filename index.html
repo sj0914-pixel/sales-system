@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 24.0)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 25.0)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
@@ -30,7 +30,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 24.0: 연간 세로 스크롤 뷰 (1월~12월 상세)</small>
+                <small class="text-light opacity-75">Ver 25.0: DB 리스트 월별 조회 기능 추가</small>
             </div>
             <div>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
@@ -56,8 +56,7 @@
                     <span class="badge bg-primary fs-6">연간 총 매출: <span id="total-year-revenue">0</span>원</span>
                 </div>
                 
-                <div id="monthly-tables-container" style="height: 70vh; overflow-y: auto; padding-right: 10px;">
-                    </div>
+                <div id="monthly-tables-container" style="height: 70vh; overflow-y: auto; padding-right: 10px;"></div>
                 
                 <div class="card mt-4">
                     <div class="card-body">
@@ -76,18 +75,47 @@
 
                 <div class="input-area" id="inputFormArea">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                        <h6 class="m-0 text-primary">✏️ 데이터 입력 & 기준일 설정</h6>
+                        <h6 class="m-0 text-primary">✏️ 데이터 입력 & 조회</h6>
                         <button class="btn btn-secondary btn-sm" id="cancelEditBtn" style="display:none;" onclick="cancelEdit()">취소</button>
                     </div>
+                    
+                    <div class="row g-2 mb-3 bg-light p-2 rounded border">
+                        <div class="col-md-2 d-flex align-items-center">
+                            <span class="fw-bold me-2">🔍 조회:</span>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="filter-year" onchange="renderDB()">
+                                <option value="2025">2025년</option>
+                                <option value="2026" selected>2026년</option>
+                                <option value="2027">2027년</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="filter-month" onchange="renderDB()">
+                                <option value="all">전체 월</option>
+                                <option value="01">1월</option> <option value="02">2월</option> <option value="03">3월</option>
+                                <option value="04">4월</option> <option value="05">5월</option> <option value="06">6월</option>
+                                <option value="07">7월</option> <option value="08">8월</option> <option value="09">9월</option>
+                                <option value="10">10월</option> <option value="11">11월</option> <option value="12">12월</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-sm btn-outline-secondary w-100" onclick="resetFilter()">전체 보기</button>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <span class="small text-muted" id="filter-info"></span>
+                        </div>
+                    </div>
+
                     <div class="row g-2">
                         <div class="col-md-3">
-                            <label class="form-label text-danger">기준 연도/월</label>
+                            <label class="form-label text-danger">등록일자 (파일 적용용)</label>
                             <div class="input-group input-group-sm">
                                 <div class="input-group-text">
                                     <input class="form-check-input mt-0" type="checkbox" id="force-date-check" title="체크 시 파일 날짜 무시">
-                                    <span class="ms-1 small">강제적용</span>
+                                    <span class="ms-1 small">강제</span>
                                 </div>
-                                <input type="date" class="form-control" id="db-date" onchange="refreshAll()">
+                                <input type="date" class="form-control" id="db-date">
                             </div>
                         </div>
                         <div class="col-md-2"><label class="form-label">쇼핑몰</label><select class="form-select form-select-sm" id="db-mall"><option value="쿠팡 윙">쿠팡 윙</option><option value="쿠팡 로켓그로스">쿠팡 로켓그로스</option><option value="스마트스토어">스마트스토어</option><option value="지마켓">지마켓</option><option value="11번가">11번가</option><option value="(SH)쿠팡 윙">(SH)쿠팡 윙</option><option value="기타">기타</option></select></div>
@@ -107,7 +135,7 @@
 
                 <div class="input-area p-0">
                     <div class="d-flex justify-content-between p-2 border-bottom bg-light">
-                        <span class="fw-bold">📋 <span id="db-list-title">전체</span> 매출 리스트 (DB)</span>
+                        <span class="fw-bold">📋 <span id="db-list-title">전체</span> 매출 리스트</span>
                         <span class="small text-muted align-self-center">총 <span id="db-count">0</span>건</span>
                         <button class="btn btn-xs btn-outline-danger" onclick="clearDB()">전체 삭제</button>
                     </div>
@@ -194,9 +222,16 @@
             dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files); });
         }
 
+        // --- 조회 필터 리셋 ---
+        function resetFilter() {
+            document.getElementById('filter-year').value = new Date().getFullYear();
+            document.getElementById('filter-month').value = 'all';
+            renderDB();
+        }
+
         function refreshAll() { renderDashboard(); renderDB(); renderAds(); renderSettlement(); }
 
-        // --- 핵심: 세로 스크롤 대시보드 (1월~12월 반복 렌더링) ---
+        // --- 대시보드 (세로 스크롤) ---
         function renderDashboard() {
             const dateInput = document.getElementById('db-date').value;
             const today = dateInput ? new Date(dateInput) : new Date();
@@ -206,26 +241,19 @@
             document.getElementById('chart-year').innerText = `${year}년`;
 
             const container = document.getElementById('monthly-tables-container');
-            container.innerHTML = ''; // 초기화
+            container.innerHTML = ''; 
 
             let yearTotalRevenue = 0;
-            // 해당 연도 전체 데이터 미리 필터링
             const yearData = dbData.filter(d => d.date.startsWith(String(year)));
 
-            // 1월부터 12월까지 반복
             for (let m = 1; m <= 12; m++) {
                 const monthStr = String(m).padStart(2, '0');
                 const lastDay = new Date(year, m, 0).getDate();
                 const ymStr = `${year}-${monthStr}`;
-                
-                // 해당 월 데이터
                 const monthlyData = yearData.filter(d => d.date.startsWith(ymStr));
-                
-                // 월별 총 매출 계산
                 const monthRevenue = monthlyData.reduce((acc, curr) => acc + curr.amount, 0);
                 yearTotalRevenue += monthRevenue;
 
-                // 월별 테이블 생성 (HTML)
                 const monthDiv = document.createElement('div');
                 monthDiv.className = 'mb-4';
                 
@@ -276,8 +304,6 @@
             }
 
             document.getElementById('total-year-revenue').innerText = yearTotalRevenue.toLocaleString();
-            
-            // 차트는 연간 TOP 10으로 그리기
             renderChart(yearData);
         }
 
@@ -315,7 +341,46 @@
             });
         }
 
-        // --- 기존 함수 유지 (정규화, 계산, 파일처리 등) ---
+        // --- 핵심: DB 리스트 월별 필터링 ---
+        function renderDB() {
+            const tbody = document.getElementById('db-body'); tbody.innerHTML = '';
+            
+            // 필터 값 가져오기
+            const selYear = document.getElementById('filter-year').value;
+            const selMonth = document.getElementById('filter-month').value;
+            
+            // 필터링 조건 생성
+            let filterPrefix = selYear;
+            let titleText = `${selYear}년 전체`;
+            
+            if (selMonth !== 'all') {
+                filterPrefix = `${selYear}-${selMonth}`;
+                titleText = `${selYear}년 ${selMonth}월`;
+            }
+
+            document.getElementById('db-list-title').innerText = titleText;
+
+            // 데이터 필터링
+            const filteredData = dbData
+                .map((item, idx) => ({...item, originalIndex: idx}))
+                .filter(item => item.date.startsWith(filterPrefix))
+                .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            // 정보 표시
+            document.getElementById('filter-info').innerText = `조회 결과: ${filteredData.length}건`;
+
+            filteredData.forEach((item) => {
+                tbody.innerHTML += `<tr>
+                    <td>${item.date}</td><td>${item.mall}</td><td class="text-start text-truncate" style="max-width:200px;">${item.product}</td>
+                    <td>${item.deliveryQty}</td><td class="text-end fw-bold">${item.amount.toLocaleString()}</td>
+                    <td>${item.salesQty}</td><td>${item.receiver}</td><td>${item.csType||''}</td><td>${item.csContent||''}</td><td>${item.returnStatus||''}</td>
+                    <td><button class="btn btn-xs btn-outline-primary py-0 me-1" onclick="editSale(${item.originalIndex})">수정</button><button class="btn btn-xs btn-outline-danger py-0" onclick="deleteDB(${item.originalIndex})">삭제</button></td>
+                </tr>`;
+            });
+            document.getElementById('db-count').innerText = filteredData.length;
+        }
+
+        // ... (나머지 파일처리, 저장 등 로직은 동일) ...
         function normalizeProductName(rawName) {
             if(!rawName) return "";
             const cleanName = rawName.replace(/\s+/g, '').toLowerCase();
@@ -376,7 +441,6 @@
 
             if (lastFileDate) document.getElementById('db-date').value = lastFileDate;
             saveToStorage(); refreshAll();
-            
             const modeMsg = isForceDate ? "강제 적용됨" : "파일 날짜 적용됨";
             alert(`✅ 처리 완료!\n- 총 등록: ${totalSuccess}건\n- 제외됨: ${totalSkipped}건 (판매량 0개)\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
             document.getElementById('excelUpload').value = '';
@@ -488,29 +552,6 @@
             });
         }
 
-        function renderDB() {
-            const tbody = document.getElementById('db-body'); tbody.innerHTML = '';
-            const dateInput = document.getElementById('db-date').value;
-            const ymStr = dateInput ? dateInput.substring(0, 7) : ""; 
-            // DB탭은 월별 보기 유지 (너무 많으면 스크롤 힘듦)
-            document.getElementById('db-list-title').innerText = ymStr ? `${ymStr.split('-')[1]}월` : '전체';
-
-            const filteredData = dbData
-                .map((item, idx) => ({...item, originalIndex: idx}))
-                .filter(item => item.date.startsWith(ymStr))
-                .sort((a,b) => new Date(b.date) - new Date(a.date));
-
-            filteredData.forEach((item) => {
-                tbody.innerHTML += `<tr>
-                    <td>${item.date}</td><td>${item.mall}</td><td class="text-start text-truncate" style="max-width:200px;">${item.product}</td>
-                    <td>${item.deliveryQty}</td><td class="text-end fw-bold">${item.amount.toLocaleString()}</td>
-                    <td>${item.salesQty}</td><td>${item.receiver}</td><td>${item.csType||''}</td><td>${item.csContent||''}</td><td>${item.returnStatus||''}</td>
-                    <td><button class="btn btn-xs btn-outline-primary py-0 me-1" onclick="editSale(${item.originalIndex})">수정</button><button class="btn btn-xs btn-outline-danger py-0" onclick="deleteDB(${item.originalIndex})">삭제</button></td>
-                </tr>`;
-            });
-            document.getElementById('db-count').innerText = filteredData.length;
-        }
-
         function editSale(index) {
             editingIndex = index; const item = dbData[index];
             document.getElementById('db-date').value = item.date; document.getElementById('db-mall').value = item.mall; document.getElementById('db-product').value = item.product;
@@ -540,14 +581,14 @@
         }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sj_sales_v24', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v24'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v25', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v25'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
         function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
         function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
         function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v24')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v24', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v24'); location.reload(); } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v25')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v25', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v25'); location.reload(); } }
     </script>
 </body>
 </html>
