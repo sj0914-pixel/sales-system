@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 22.0 - 자사양식 지원)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 23.0)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
@@ -19,8 +19,8 @@
         .drop-zone { border: 2px dashed #0d6efd; border-radius: 10px; padding: 30px; text-align: center; background-color: #f8f9fa; cursor: pointer; margin-bottom: 15px; transition: all 0.3s; }
         .drop-zone:hover { background-color: #e7f1ff; border-color: #0b5ed7; }
         .drop-icon { font-size: 2.5rem; color: #0d6efd; margin-bottom: 10px; }
-        .info-text { font-size: 0.85rem; color: #6c757d; }
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
+        .fw-bold-total { font-weight: 800; color: #0d6efd; }
     </style>
 </head>
 <body>
@@ -29,7 +29,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 22.0: 자사 가공 파일(백업본) 자동 인식 추가</small>
+                <small class="text-light opacity-75">Ver 23.0: 연간 매출 현황 (1월~12월) + 인기상품 TOP 10</small>
             </div>
             <div>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
@@ -50,20 +50,24 @@
 
         <div class="tab-content p-3 bg-white border border-top-0 rounded-bottom shadow-sm">
             <div class="tab-pane fade show active" id="dashboard">
-                <div class="d-flex justify-content-between mb-2">
-                    <h5 id="dash-title">📅 매출 현황</h5>
-                    <span class="badge bg-primary fs-6">총 매출: <span id="total-revenue">0</span>원</span>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 id="dash-title" class="m-0 fw-bold">📅 2026년 연간 매출 현황</h5>
+                    <div>
+                        <span class="badge bg-primary fs-6 me-2">총 매출: <span id="total-revenue">0</span>원</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleViewMode()" id="viewModeBtn">🔄 일별 보기</button>
+                    </div>
                 </div>
-                <div class="alert alert-info py-1 small">💡 <b>Tip:</b> 아래 '매출 등록' 탭의 <b>[기준일]</b>을 변경하면 해당 월 데이터가 보입니다.</div>
-                <div class="table-responsive" style="height: 70vh;">
-                    <table class="table table-bordered table-hover table-sm table-striped">
+                
+                <div class="table-responsive" style="height: 60vh;">
+                    <table class="table table-bordered table-hover table-sm table-striped text-center">
                         <thead><tr id="date-header"></tr></thead>
                         <tbody id="dashboard-body"></tbody>
                     </table>
                 </div>
+                
                 <div class="card mt-3">
                     <div class="card-body">
-                        <h6 class="card-title fw-bold text-secondary">📊 이달의 인기 상품 TOP 10</h6>
+                        <h6 class="card-title fw-bold text-secondary">📊 <span id="chart-title">2026년</span> 인기 상품 TOP 10 (판매수량 기준)</h6>
                         <div class="chart-container"><canvas id="salesChart"></canvas></div>
                     </div>
                 </div>
@@ -72,22 +76,21 @@
             <div class="tab-pane fade" id="db">
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
                     <div class="drop-icon">📂 📂 📂</div>
-                    <p>모든 엑셀 파일(쿠팡, 스마트스토어, 로켓그로스, <b>자사백업파일</b>) 지원</p>
-                    <p class="info-text mt-2">※ 자사 파일 업로드 시, <b>파일 내부에 적힌 날짜</b> 그대로 등록됩니다.</p>
+                    <p>모든 파일 드래그 (로켓그로스, 쿠팡, 스마트스토어, 백업파일)</p>
                     <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
 
                 <div class="input-area" id="inputFormArea">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                        <h6 class="m-0 text-primary" id="formTitle">✏️ 데이터 입력 & 조회</h6>
+                        <h6 class="m-0 text-primary">✏️ 데이터 입력 & 기준일 설정</h6>
                         <button class="btn btn-secondary btn-sm" id="cancelEditBtn" style="display:none;" onclick="cancelEdit()">취소</button>
                     </div>
                     <div class="row g-2">
                         <div class="col-md-3">
-                            <label class="form-label text-danger">기준일 (조회/입력)</label>
+                            <label class="form-label text-danger">기준일 (연도/월 선택)</label>
                             <div class="input-group input-group-sm">
                                 <div class="input-group-text">
-                                    <input class="form-check-input mt-0" type="checkbox" id="force-date-check" title="체크 시 파일 날짜 무시하고 이 날짜 적용">
+                                    <input class="form-check-input mt-0" type="checkbox" id="force-date-check" title="체크 시 파일 날짜 무시">
                                     <span class="ms-1 small">강제적용</span>
                                 </div>
                                 <input type="date" class="form-control" id="db-date" onchange="refreshAll()">
@@ -145,7 +148,6 @@
     <script>
         const CHANNELS = ['쿠팡 윙', '쿠팡 로켓배송', '쿠팡 로켓그로스', '스마트스토어', '지마켓', '11번가', '(SH)쿠팡 윙'];
         let TARGETS = {'쿠팡 윙': 10000000, '쿠팡 로켓그로스': 24000000, '스마트스토어': 3000000};
-        
         const MATCHING_RULES = [
             { target: "브레인롯 랜덤딱지 파우치", keywords: ["브레인롯"] },
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2개"] },
@@ -180,6 +182,7 @@
 
         let dbData = [], adData = [], settlementData = [];
         let editingIndex = -1, salesChart = null;
+        let isYearlyView = true; // 기본값: 연간 보기
 
         window.onload = function() {
             loadFromStorage();
@@ -198,7 +201,129 @@
             dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files); });
         }
 
+        // --- 보기 전환 버튼 ---
+        function toggleViewMode() {
+            isYearlyView = !isYearlyView;
+            document.getElementById('viewModeBtn').innerText = isYearlyView ? "🔄 일별 보기" : "🔄 연간 보기";
+            refreshAll();
+        }
+
         function refreshAll() { renderDashboard(); renderDB(); renderAds(); renderSettlement(); }
+
+        // --- 렌더링 (대시보드) ---
+        function renderDashboard() {
+            const dateInput = document.getElementById('db-date').value;
+            const today = dateInput ? new Date(dateInput) : new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const ymStr = `${year}-${month}`; // 2026-01
+
+            const thead = document.getElementById('date-header');
+            const tbody = document.getElementById('dashboard-body');
+            let totalRevenue = 0;
+            let targetData = []; // 차트용 데이터
+
+            if (isYearlyView) {
+                // [연간 모드]
+                document.getElementById('dash-title').innerText = `📅 ${year}년 연간 매출 현황`;
+                document.getElementById('chart-title').innerText = `${year}년`;
+                
+                let html = '<th class="bg-light sticky-col">채널</th><th class="bg-light">연간목표</th><th class="bg-light">연간합계</th><th class="bg-light">달성률</th>';
+                for(let m=1; m<=12; m++) html += `<th>${m}월</th>`;
+                thead.innerHTML = html;
+                tbody.innerHTML = '';
+
+                // 해당 연도 전체 데이터 필터링
+                targetData = dbData.filter(d => d.date.startsWith(String(year)));
+
+                CHANNELS.forEach(ch => {
+                    let rowTotal = 0;
+                    let cells = '';
+                    for(let m=1; m<=12; m++) {
+                        const mStr = String(m).padStart(2,'0');
+                        // 해당 월(YYYY-MM)로 시작하는 데이터 합산
+                        const sum = targetData.filter(d => d.date.startsWith(`${year}-${mStr}`) && d.mall === ch).reduce((a,c) => a+c.amount, 0);
+                        rowTotal += sum;
+                        cells += `<td class="text-end">${sum ? sum.toLocaleString() : '-'}</td>`;
+                    }
+                    totalRevenue += rowTotal;
+                    // 목표는 월 목표 * 12로 단순화
+                    const yearTarget = (TARGETS[ch] || 0) * 12;
+                    const rate = yearTarget ? (rowTotal/yearTarget*100).toFixed(1)+'%' : '-';
+                    tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${yearTarget.toLocaleString()}</td><td class="text-end fw-bold-total">${rowTotal.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
+                });
+
+            } else {
+                // [일별 모드] (기존 로직)
+                document.getElementById('dash-title').innerText = `📅 ${year}년 ${month}월 일별 매출 현황`;
+                document.getElementById('chart-title').innerText = `${month}월`;
+
+                let html = '<th class="bg-light sticky-col">채널</th><th class="bg-light">월목표</th><th class="bg-light">월합계</th><th class="bg-light">달성률</th>';
+                const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
+                for(let i=1; i<=lastDay; i++) html += `<th>${i}일</th>`;
+                thead.innerHTML = html;
+                tbody.innerHTML = '';
+
+                // 해당 월 데이터 필터링
+                targetData = dbData.filter(d => d.date.startsWith(ymStr));
+
+                CHANNELS.forEach(ch => {
+                    let rowTotal = 0;
+                    let cells = '';
+                    for(let i=1; i<=lastDay; i++) {
+                        const dayStr = String(i).padStart(2,'0');
+                        const dt = `${year}-${month}-${dayStr}`; 
+                        const sum = targetData.filter(d => d.date === dt && d.mall === ch).reduce((a,c) => a+c.amount, 0);
+                        rowTotal += sum;
+                        cells += `<td class="text-end">${sum ? sum.toLocaleString() : '-'}</td>`;
+                    }
+                    totalRevenue += rowTotal;
+                    const target = TARGETS[ch] || 0;
+                    const rate = target ? (rowTotal/target*100).toFixed(1)+'%' : '-';
+                    tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${target.toLocaleString()}</td><td class="text-end fw-bold-total">${rowTotal.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
+                });
+            }
+
+            document.getElementById('total-revenue').innerText = totalRevenue.toLocaleString();
+            renderChart(targetData);
+        }
+
+        // --- 차트 그리기 (TOP 10) ---
+        function renderChart(dataScope) {
+            const productSales = {};
+            dataScope.forEach(item => {
+                const name = item.product || "이름없음";
+                if(!productSales[name]) productSales[name] = 0;
+                productSales[name] += item.salesQty;
+            });
+            const sorted = Object.keys(productSales).map(k => ({name:k, qty:productSales[k]})).sort((a,b)=>b.qty-a.qty).slice(0,10);
+            
+            if(salesChart) salesChart.destroy();
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            salesChart = new Chart(ctx, {
+                type: 'bar', 
+                data: { 
+                    labels: sorted.map(p=>p.name), 
+                    datasets: [{ 
+                        label: '판매수량', 
+                        data: sorted.map(p=>p.qty), 
+                        backgroundColor: '#36a2eb',
+                        borderColor: '#36a2eb',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }] 
+                },
+                options: { 
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true } }
+                }
+            });
+        }
+
+        // --- 기존 기능 유지 ---
         function normalizeProductName(rawName) {
             if(!rawName) return "";
             const cleanName = rawName.replace(/\s+/g, '').toLowerCase();
@@ -208,13 +333,11 @@
             return rawName;
         }
         function parseMoney(val) { return Number(String(val||0).replace(/,/g, '').trim()) || 0; }
-        
         function calculateRealSalesQty(rawName, excelQty) {
             if (!rawName) return excelQty;
             const match = rawName.match(/(\d+)\s*(팩|개|set|세트|box|박스)(?!입)/i);
             return match ? (excelQty * parseInt(match[1])) : excelQty;
         }
-
         function getDateFromFilename(filename) {
             const match = filename.match(/_(\d{4})\./);
             if (match) {
@@ -232,7 +355,7 @@
             const manualDate = document.getElementById('db-date').value;
             if(isForceDate && !manualDate) { alert('날짜를 선택해주세요!'); return; }
 
-            let totalSuccess = 0, totalFiles = files.length, lastFileDate = "", totalSkipped = 0;
+            let totalSuccess = 0, totalSkipped = 0, lastFileDate = "";
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -260,12 +383,10 @@
             }
 
             if (lastFileDate) document.getElementById('db-date').value = lastFileDate;
-
-            saveToStorage();
-            refreshAll();
+            saveToStorage(); refreshAll();
             
             const modeMsg = isForceDate ? "강제 적용됨" : "파일 날짜 적용됨";
-            alert(`✅ 처리 완료!\n\n- 총 등록: ${totalSuccess}건\n- 제외됨: ${totalSkipped}건 (판매량 0개)\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
+            alert(`✅ 처리 완료!\n- 총 등록: ${totalSuccess}건\n- 제외됨: ${totalSkipped}건 (판매량 0개)\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
             document.getElementById('excelUpload').value = '';
         }
 
@@ -305,26 +426,18 @@
                             let rawProductName = "", excelQty = 1;
 
                             if (platform === 'SJ_BACKUP') {
-                                // 자사 가공 파일 (날짜 그대로 사용)
                                 newOrder.date = row[colMap['수집일']] || dateStr; 
                                 newOrder.mall = row[colMap['쇼핑몰']];
                                 newOrder.rawId = row[colMap['ID']] || row[colMap['송장번호']] || `BACKUP-${i}`;
                                 rawProductName = row[colMap['상품명']];
-                                newOrder.product = rawProductName; // 이미 가공된 이름일 확률 높음
+                                newOrder.product = rawProductName; 
                                 newOrder.amount = parseMoney(row[colMap['결제금액']]);
                                 newOrder.salesQty = parseMoney(row[colMap['판매수량']]);
                                 newOrder.receiver = row[colMap['수취인명']];
                                 newOrder.deliveryQty = 1;
-                                
-                                // 중복 체크 후 바로 추가 (정규화/계산 건너뜀)
-                                if(!dbData.some(d => d.rawId == newOrder.rawId)) {
-                                    dbData.push(newOrder);
-                                    inserted++;
-                                }
-                                continue; // 루프 계속
-                            } 
-                            // ... 기존 로직 ...
-                            else if (platform === 'SMARTSTORE') {
+                                if(!dbData.some(d => d.rawId == newOrder.rawId)) { dbData.push(newOrder); inserted++; }
+                                continue; 
+                            } else if (platform === 'SMARTSTORE') {
                                 if(!row[colMap['상품주문번호']]) continue;
                                 newOrder.mall = '스마트스토어'; newOrder.rawId = row[colMap['상품주문번호']];
                                 rawProductName = row[colMap['상품명']] + (row[colMap['옵션정보']] ? ' ' + row[colMap['옵션정보']] : '');
@@ -345,7 +458,6 @@
                                 if(!row[colMap['상품명']]) continue;
                                 excelQty = parseMoney(row[colMap['판매량']]);
                                 if(excelQty === 0) { skipped++; continue; } 
-
                                 newOrder.mall = '쿠팡 로켓그로스';
                                 newOrder.rawId = `GROWTH-${dateStr}-${i}`;
                                 rawProductName = (row[colMap['상품명']]||'') + ' ' + (row[colMap['옵션명']]||'');
@@ -384,69 +496,18 @@
             });
         }
 
-        function renderChart(monthlyData) {
-            const productSales = {};
-            monthlyData.forEach(item => {
-                const name = item.product || "이름없음";
-                if(!productSales[name]) productSales[name] = 0;
-                productSales[name] += item.salesQty;
-            });
-            const sorted = Object.keys(productSales).map(k => ({name:k, qty:productSales[k]})).sort((a,b)=>b.qty-a.qty).slice(0,10);
-            if(salesChart) salesChart.destroy();
-            salesChart = new Chart(document.getElementById('salesChart').getContext('2d'), {
-                type: 'bar', data: { labels: sorted.map(p=>p.name), datasets: [{ label: '판매수량', data: sorted.map(p=>p.qty), backgroundColor: '#36a2eb' }] },
-                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
-            });
-        }
-
-        function renderDashboard() {
-            const dateInput = document.getElementById('db-date').value;
-            const today = dateInput ? new Date(dateInput) : new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const ymStr = `${year}-${month}`; 
-            
-            document.getElementById('dash-title').innerText = `📅 ${year}년 ${month}월 매출 현황`;
-
-            const thead = document.getElementById('date-header');
-            const tbody = document.getElementById('dashboard-body');
-            let html = '<th class="bg-light sticky-col">채널</th><th class="bg-light">목표</th><th class="bg-light">합계</th><th class="bg-light">달성률</th>';
-            const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
-            for(let i=1; i<=lastDay; i++) html += `<th>${i}일</th>`;
-            thead.innerHTML = html;
-            tbody.innerHTML = '';
-            
-            let totalRevenue = 0;
-            const monthlyData = dbData.filter(d => d.date.startsWith(ymStr));
-
-            CHANNELS.forEach(ch => {
-                let rowTotal = 0;
-                let cells = '';
-                for(let i=1; i<=lastDay; i++) {
-                    const dayStr = String(i).padStart(2,'0');
-                    const dt = `${year}-${month}-${dayStr}`; 
-                    const sum = monthlyData.filter(d => d.date === dt && d.mall === ch).reduce((a,c) => a+c.amount, 0);
-                    rowTotal += sum;
-                    cells += `<td class="text-end">${sum ? sum.toLocaleString() : '-'}</td>`;
-                }
-                totalRevenue += rowTotal;
-                const target = TARGETS[ch] || 0;
-                const rate = target ? (rowTotal/target*100).toFixed(1)+'%' : '-';
-                tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${target.toLocaleString()}</td><td class="text-end fw-bold text-primary">${rowTotal.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
-            });
-            document.getElementById('total-revenue').innerText = totalRevenue.toLocaleString();
-            renderChart(monthlyData);
-        }
-
         function renderDB() {
             const tbody = document.getElementById('db-body'); tbody.innerHTML = '';
             const dateInput = document.getElementById('db-date').value;
             const ymStr = dateInput ? dateInput.substring(0, 7) : ""; 
-            document.getElementById('db-list-title').innerText = ymStr ? `${ymStr.split('-')[1]}월` : '전체';
+            
+            // 날짜 기준: 연간 모드면 연도 전체, 아니면 월만 표시
+            const filterStr = isYearlyView ? ymStr.split('-')[0] : ymStr;
+            document.getElementById('db-list-title').innerText = isYearlyView ? `${filterStr}년 전체` : `${ymStr.split('-')[1]}월`;
 
             const filteredData = dbData
                 .map((item, idx) => ({...item, originalIndex: idx}))
-                .filter(item => item.date.startsWith(ymStr))
+                .filter(item => item.date.startsWith(filterStr))
                 .sort((a,b) => new Date(b.date) - new Date(a.date));
 
             filteredData.forEach((item) => {
@@ -460,17 +521,43 @@
             document.getElementById('db-count').innerText = filteredData.length;
         }
 
-        // ... 나머지 함수들 (editSale, cancelEdit, addOrUpdateSale, deleteDB, clearDB, saveToStorage, loadFromStorage, renderAds, renderSettlement, addSettlement, downloadData, loadDataFromBackup, resetData) 동일 ...
+        function editSale(index) {
+            editingIndex = index; const item = dbData[index];
+            document.getElementById('db-date').value = item.date; document.getElementById('db-mall').value = item.mall; document.getElementById('db-product').value = item.product;
+            document.getElementById('db-amount').value = item.amount; document.getElementById('db-sales-qty').value = item.salesQty; document.getElementById('db-receiver').value = item.receiver;
+            document.getElementById('db-cs-type').value = item.csType||''; document.getElementById('db-cs-content').value = item.csContent||''; document.getElementById('db-return').value = item.returnStatus||'';
+            document.getElementById('formTitle').innerText = "✏️ 수정 중..."; document.getElementById('submitBtn').innerText = "💾 저장"; document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-success');
+            document.getElementById('cancelEditBtn').style.display = 'block'; document.getElementById('inputFormArea').classList.add('editing-mode'); document.getElementById('inputFormArea').scrollIntoView({ behavior: 'smooth' });
+        }
+        function cancelEdit() {
+            editingIndex = -1; document.getElementById('db-product').value = ''; document.getElementById('db-amount').value = ''; document.getElementById('db-receiver').value = '';
+            document.getElementById('db-cs-type').value = ''; document.getElementById('db-cs-content').value = ''; document.getElementById('db-return').value = '';
+            document.getElementById('formTitle').innerText = "✏️ 데이터 입력"; document.getElementById('submitBtn').innerText = "➕ 추가"; document.getElementById('submitBtn').classList.replace('btn-success', 'btn-primary');
+            document.getElementById('cancelEditBtn').style.display = 'none'; document.getElementById('inputFormArea').classList.remove('editing-mode');
+        }
+        function addOrUpdateSale() {
+            const date = document.getElementById('db-date').value; const amount = document.getElementById('db-amount').value;
+            if(!date || !amount) return alert('날짜/금액 필수');
+            const newItem = {
+                date: date, mall: document.getElementById('db-mall').value, product: document.getElementById('db-product').value,
+                deliveryQty: 1, amount: Number(amount), salesQty: Number(document.getElementById('db-sales-qty').value),
+                receiver: document.getElementById('db-receiver').value, csType: document.getElementById('db-cs-type').value,
+                csContent: document.getElementById('db-cs-content').value, returnStatus: document.getElementById('db-return').value,
+                rawId: editingIndex > -1 ? dbData[editingIndex].rawId : ('MANUAL-'+Date.now())
+            };
+            if(editingIndex > -1) { dbData[editingIndex] = newItem; alert('수정완료'); cancelEdit(); } else { dbData.push(newItem); document.getElementById('db-product').value=''; document.getElementById('db-amount').value=''; }
+            saveToStorage(); refreshAll();
+        }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sj_sales_v22', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v22'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v23', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v23'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
         function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
         function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
         function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v22')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v22', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v22'); location.reload(); } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v23')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v23', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v23'); location.reload(); } }
     </script>
 </body>
 </html>
