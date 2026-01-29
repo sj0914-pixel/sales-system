@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 18.0)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 20.0 - 완벽 분기 처리)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
@@ -14,7 +14,6 @@
         .table-responsive { overflow-x: auto; white-space: nowrap; }
         .table th { background-color: #e9ecef; vertical-align: middle; text-align: center; white-space: nowrap; }
         .table td { vertical-align: middle; padding: 4px 8px; white-space: nowrap; }
-        .negative { color: red; font-weight: bold; }
         .input-area { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; border: 1px solid #dee2e6; }
         .form-label { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; color: #495057; }
         .sticky-col { position: sticky; left: 0; background-color: white; z-index: 1; }
@@ -28,8 +27,6 @@
         .drop-zone p { margin: 0; color: #495057; font-weight: bold; font-size: 1.1rem; }
         .drop-icon { font-size: 2.5rem; color: #0d6efd; margin-bottom: 10px; }
         .info-text { font-size: 0.85rem; color: #6c757d; }
-
-        /* 차트 컨테이너 스타일 */
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
     </style>
 </head>
@@ -39,7 +36,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 18.0: 월별 데이터 분리 + 판매 추이 그래프</small>
+                <small class="text-light opacity-75">Ver 20.0: 일반/로켓그로스 자동 구분 완벽 지원</small>
             </div>
             <div>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
@@ -59,39 +56,33 @@
         </ul>
 
         <div class="tab-content p-3 bg-white border border-top-0 rounded-bottom shadow-sm">
-            
             <div class="tab-pane fade show active" id="dashboard">
                 <div class="d-flex justify-content-between mb-2">
                     <h5 id="dash-title">📅 매출 현황</h5>
                     <span class="badge bg-primary fs-6">총 매출: <span id="total-revenue">0</span>원</span>
                 </div>
                 <div class="alert alert-info py-1 small">
-                    💡 <b>Tip:</b> 아래 '매출 등록' 탭의 <b>[수집일]</b>을 변경하면, 해당 <b>월(Month)</b>의 데이터만 보입니다.
+                    💡 <b>Tip:</b> 아래 '매출 등록' 탭의 <b>[기준일]</b>을 변경하면, 해당 <b>월(Month)</b>의 데이터만 보입니다.
                 </div>
-                
-                <div class="table-responsive" style="max-height: 40vh;">
+                <div class="table-responsive" style="height: 70vh;">
                     <table class="table table-bordered table-hover table-sm table-striped">
                         <thead><tr id="date-header"></tr></thead>
                         <tbody id="dashboard-body"></tbody>
                     </table>
                 </div>
-
                 <div class="card mt-3">
                     <div class="card-body">
                         <h6 class="card-title fw-bold text-secondary">📊 이달의 인기 상품 TOP 10 (판매수량 기준)</h6>
-                        <div class="chart-container">
-                            <canvas id="salesChart"></canvas>
-                        </div>
+                        <div class="chart-container"><canvas id="salesChart"></canvas></div>
                     </div>
                 </div>
             </div>
 
             <div class="tab-pane fade" id="db">
-                
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
                     <div class="drop-icon">📂 📂 📂</div>
-                    <p>이곳에 엑셀 파일을 드래그하세요.</p>
-                    <p class="info-text mt-2">※ 파일의 날짜를 기준으로 자동 저장됩니다.</p>
+                    <p>주문서(쿠팡윙, 스마트스토어) 및 로켓그로스 파일을 드래그하세요.</p>
+                    <p class="info-text mt-2">※ 일반 파일: 엑셀 내부 날짜/수취인 적용<br>※ 로켓그로스: 파일명 날짜 / 수취인 '쿠팡' 적용</p>
                     <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
 
@@ -100,7 +91,6 @@
                         <h6 class="m-0 text-primary" id="formTitle">✏️ 데이터 입력 & 조회</h6>
                         <button class="btn btn-secondary btn-sm" id="cancelEditBtn" style="display:none;" onclick="cancelEdit()">취소</button>
                     </div>
-                    
                     <div class="row g-2">
                         <div class="col-md-3">
                             <label class="form-label text-danger">기준일 (조회/입력)</label>
@@ -127,7 +117,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">상품명</label>
-                            <input type="text" class="form-control form-control-sm" id="db-product" list="productOptions" placeholder="상품명 입력">
+                            <input type="text" class="form-control form-control-sm" id="db-product" list="productOptions">
                             <datalist id="productOptions"></datalist>
                         </div>
                          <div class="col-md-1">
@@ -136,7 +126,7 @@
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">결제금액</label>
-                            <input type="number" class="form-control form-control-sm" id="db-amount" placeholder="원">
+                            <input type="number" class="form-control form-control-sm" id="db-amount">
                         </div>
                         <div class="col-md-1">
                             <label class="form-label">판매수량</label>
@@ -173,8 +163,8 @@
 
                 <div class="input-area p-0">
                     <div class="d-flex justify-content-between p-2 border-bottom bg-light">
-                        <span class="fw-bold">📋 <span id="db-list-title">1월</span> 매출 리스트</span>
-                        <span class="small text-muted align-self-center">총 <span id="db-count">0</span>건 (월별)</span>
+                        <span class="fw-bold">📋 <span id="db-list-title">전체</span> 매출 리스트</span>
+                        <span class="small text-muted align-self-center">총 <span id="db-count">0</span>건</span>
                         <button class="btn btn-xs btn-outline-danger" onclick="clearDB()">전체 삭제</button>
                     </div>
                     <div class="table-responsive" style="max-height: 50vh;">
@@ -246,6 +236,7 @@
             { target: "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-빛나핑", keywords: ["올인원", "빛나"] },
             { target: "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-초롱핑", keywords: ["올인원", "초롱"] },
             { target: "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-반짝핑", keywords: ["올인원", "반짝"] },
+            { target: "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-반짝핑", keywords: ["올인원", "빤짝"] },
             { target: "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-왕자핑", keywords: ["올인원", "왕자"] },
             { target: "슈팅스타 캐치티니핑 올인원 교정젓가락 세트-오로라핑", keywords: ["올인원", "오로라"] },
             { target: "슈팅스타 캐치티니핑 시즌5 / 한글자석플러스", keywords: ["한글", "자석"] },
@@ -267,67 +258,52 @@
         ];
 
         let dbData = [], adData = [], settlementData = [];
-        let editingIndex = -1;
-        let salesChart = null; // 차트 인스턴스
+        let editingIndex = -1, salesChart = null;
 
         window.onload = function() {
             loadFromStorage();
             document.getElementById('db-date').value = new Date().toISOString().substring(0,10);
-            
-            const uniqueTargets = [...new Set(MATCHING_RULES.map(r => r.target))];
             const datalist = document.getElementById('productOptions');
-            uniqueTargets.forEach(p => {
-                const option = document.createElement('option');
-                option.value = p;
-                datalist.appendChild(option);
+            [...new Set(MATCHING_RULES.map(r => r.target))].forEach(p => {
+                const option = document.createElement('option'); option.value = p; datalist.appendChild(option);
             });
-            setupDropZone();
-            refreshAll();
+            setupDropZone(); refreshAll();
         };
 
         function setupDropZone() {
             const dropZone = document.getElementById('dropZone');
             dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
             dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault(); dropZone.classList.remove('dragover');
-                if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files);
-            });
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files); });
         }
 
-        // --- 통합 갱신 함수 ---
-        function refreshAll() {
-            renderDashboard(); // 대시보드 (표 + 차트)
-            renderDB();        // DB 리스트 (월별 필터링)
-            renderAds();
-            renderSettlement();
-        }
-
+        function refreshAll() { renderDashboard(); renderDB(); renderAds(); renderSettlement(); }
         function normalizeProductName(rawName) {
             if(!rawName) return "";
             const cleanName = rawName.replace(/\s+/g, '').toLowerCase();
             for (let rule of MATCHING_RULES) {
-                const allMatch = rule.keywords.every(k => cleanName.includes(k.replace(/\s+/g, '').toLowerCase()));
-                if (allMatch) return rule.target;
+                if (rule.keywords.every(k => cleanName.includes(k.replace(/\s+/g, '').toLowerCase()))) return rule.target;
             }
             return rawName;
         }
-
-        function parseMoney(val) {
-            if (!val) return 0;
-            const clean = String(val).replace(/,/g, '').trim();
-            return Number(clean) || 0;
-        }
-
+        function parseMoney(val) { return Number(String(val||0).replace(/,/g, '').trim()) || 0; }
+        
         function calculateRealSalesQty(rawName, excelQty) {
             if (!rawName) return excelQty;
-            const regex = /(\d+)\s*(팩|개|set|세트|box|박스)(?!입)/i;
-            const match = rawName.match(regex);
+            const match = rawName.match(/(\d+)\s*(팩|개|set|세트|box|박스)(?!입)/i);
+            return match ? (excelQty * parseInt(match[1])) : excelQty;
+        }
+
+        // --- 로켓그로스 날짜 파싱 ---
+        function getDateFromFilename(filename) {
+            const match = filename.match(/_(\d{4})\./);
             if (match) {
-                const multiplier = parseInt(match[1]);
-                if (multiplier > 0) return excelQty * multiplier;
+                const mm = match[1].substring(0,2);
+                const dd = match[1].substring(2,4);
+                const year = new Date().getFullYear();
+                return `${year}-${mm}-${dd}`;
             }
-            return excelQty;
+            return "";
         }
 
         async function handleExcelUpload(files) {
@@ -342,50 +318,62 @@
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                const fileDateObj = new Date(file.lastModified);
-                const fileDateStr = fileDateObj.toISOString().substring(0,10);
+                let fileDateStr = "";
+                let isRocketGrowth = false;
+                
+                // 로켓그로스 파일 여부 확인
+                if (file.name.includes("SELLER_INSIGHTS") || file.name.match(/_\d{4}\./)) {
+                    fileDateStr = getDateFromFilename(file.name);
+                    isRocketGrowth = true; // 플래그 설정
+                }
+                
+                if (!fileDateStr) {
+                    const dobj = new Date(file.lastModified);
+                    fileDateStr = dobj.toISOString().substring(0,10);
+                }
+
+                // 강제 날짜 우선, 아니면 파일 날짜
                 const finalDate = isForceDate ? manualDate : fileDateStr;
                 lastFileDate = finalDate;
 
                 try {
-                    const count = await processSingleFile(file, finalDate);
+                    // isRocketGrowth 플래그 전달
+                    const count = await processSingleFile(file, finalDate, isRocketGrowth);
                     totalSuccess += count;
                 } catch (e) { console.error(`${file.name} 오류:`, e); }
             }
 
+            // 가장 마지막에 처리된 파일의 날짜로 뷰 갱신
             if (lastFileDate) document.getElementById('db-date').value = lastFileDate;
 
             saveToStorage();
             refreshAll();
-            
-            const modeMsg = isForceDate ? "강제 적용됨" : "파일 날짜 적용됨";
-            alert(`총 ${totalFiles}개 파일 처리 완료!\n✅ 총 ${totalSuccess}건 등록 (${modeMsg})\n📅 기준일: ${lastFileDate}`);
+            alert(`총 ${totalFiles}개 파일 처리 완료!\n✅ ${totalSuccess}건 등록`);
             document.getElementById('excelUpload').value = '';
         }
 
-        function processSingleFile(file, dateStr) {
+        function processSingleFile(file, dateStr, isRocketGrowth) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
-                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
-
+                        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
                         if(jsonData.length < 1) { resolve(0); return; }
 
                         let headerRow = -1, platform = 'UNKNOWN', colMap = {};
-                        for(let r=0; r<Math.min(5, jsonData.length); r++) {
+                        for(let r=0; r<Math.min(10, jsonData.length); r++) {
                             const rowStr = JSON.stringify(jsonData[r]);
                             if(rowStr.includes('상품주문번호') && rowStr.includes('주문 유입경로')) { headerRow = r; platform = 'SMARTSTORE'; break; } 
                             else if(rowStr.includes('등록상품명') && rowStr.includes('노출상품명')) { headerRow = r; platform = 'COUPANG'; break; } 
                             else if(rowStr.includes('판매아이디') && rowStr.includes('발송마감일')) { headerRow = r; platform = 'GMARKET'; break; } 
                             else if(rowStr.includes('주문번호') && rowStr.includes('옵션명')) { headerRow = r; platform = 'EBOT'; break; }
+                            else if(rowStr.includes('판매량') && rowStr.includes('매출(원)')) { headerRow = r; platform = 'ROCKET_GROWTH'; break; }
                         }
 
                         if(headerRow === -1) { resolve(0); return; }
-                        jsonData[headerRow].forEach((col, idx) => { if(col) colMap[col.trim()] = idx; });
+                        jsonData[headerRow].forEach((col, idx) => { if(col) colMap[String(col).trim()] = idx; });
                         
                         let successCount = 0;
                         for(let i = headerRow + 1; i < jsonData.length; i++) {
@@ -396,36 +384,45 @@
                                 date: dateStr, mall: '', product: '', deliveryQty: 1, amount: 0,
                                 salesQty: 1, receiver: '', csType: '', csContent: '', returnStatus: '', rawId: ''
                             };
-                            let rawProductName = "";
-                            let excelQty = 1;
+                            let rawProductName = "", excelQty = 1;
 
-                            if(platform === 'SMARTSTORE') {
+                            // 플랫폼별 처리
+                            if (platform === 'SMARTSTORE') {
                                 if(!row[colMap['상품주문번호']]) continue;
-                                newOrder.mall = '스마트스토어';
-                                newOrder.rawId = row[colMap['상품주문번호']];
+                                newOrder.mall = '스마트스토어'; newOrder.rawId = row[colMap['상품주문번호']];
                                 rawProductName = row[colMap['상품명']] + (row[colMap['옵션정보']] ? ' ' + row[colMap['옵션정보']] : '');
                                 newOrder.amount = parseMoney(row[colMap['최종 상품별 총 주문금액']] || row[colMap['상품가격']]);
                                 excelQty = Number(row[colMap['수량']] || 1);
-                                newOrder.receiver = row[colMap['수취인명']];
+                                newOrder.receiver = row[colMap['수취인명']]; // 원래 수취인 사용
+                                // 스마트스토어 날짜 처리: 주문일시가 있으면 그걸 1순위로 고려 (지금은 통합 dateStr 사용)
                             } else if (platform === 'COUPANG') {
                                 if(!row[colMap['주문번호']]) continue;
-                                newOrder.mall = '쿠팡 윙';
-                                newOrder.rawId = row[colMap['주문번호']];
-                                rawProductName = (row[colMap['등록상품명']] || '') + ' ' + (row[colMap['등록옵션명']] || '');
-                                if(rawProductName.trim() === '') rawProductName = row[colMap['노출상품명(옵션명)']] || row[colMap['노출상품명']] || '';
+                                newOrder.mall = '쿠팡 윙'; newOrder.rawId = row[colMap['주문번호']];
+                                rawProductName = (row[colMap['등록상품명']]||'') + ' ' + (row[colMap['등록옵션명']]||'');
+                                if(rawProductName.trim() === '') rawProductName = row[colMap['노출상품명(옵션명)']] || '';
                                 let price = parseMoney(row[colMap['결제액']]);
                                 if(!price) price = parseMoney(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]);
                                 newOrder.amount = price;
                                 excelQty = Number(row[colMap['구매수(수량)']] || 1);
-                                newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
+                                newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']]; // 원래 수취인 사용
+                            } else if (platform === 'ROCKET_GROWTH') {
+                                // *** 로켓그로스 예외 처리 ***
+                                if(!row[colMap['상품명']]) continue;
+                                excelQty = parseMoney(row[colMap['판매량']]);
+                                if(excelQty === 0) continue; // 판매량 0 제외
+
+                                newOrder.mall = '쿠팡 로켓그로스';
+                                newOrder.rawId = `GROWTH-${dateStr}-${i}`;
+                                rawProductName = (row[colMap['상품명']]||'') + ' ' + (row[colMap['옵션명']]||'');
+                                newOrder.amount = parseMoney(row[colMap['매출(원)']]);
+                                newOrder.receiver = '쿠팡'; // *** 수취인 '쿠팡' 고정 ***
                             } else if (platform === 'GMARKET') {
                                 if(!row[colMap['주문번호']]) continue;
-                                newOrder.mall = '지마켓';
-                                newOrder.rawId = row[colMap['주문번호']];
+                                newOrder.mall = '지마켓'; newOrder.rawId = row[colMap['주문번호']];
                                 rawProductName = row[colMap['상품명']];
                                 newOrder.amount = parseMoney(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']]));
                                 excelQty = Number(row[colMap['수량']] || 1);
-                                newOrder.receiver = row[colMap['수령인명']];
+                                newOrder.receiver = row[colMap['수령인명']]; // 원래 수취인 사용
                             } else if (platform === 'EBOT') {
                                 if(!row[colMap['주문번호']]) continue;
                                 newOrder.mall = row[colMap['주문번호']] === '쿠팡윙' ? '쿠팡 윙' : row[colMap['주문번호']];
@@ -433,13 +430,14 @@
                                 rawProductName = row[colMap['상품명']] + (row[colMap['옵션명']] ? ' ' + row[colMap['옵션명']] : '');
                                 newOrder.amount = parseMoney(row[colMap['판매금액']]);
                                 excelQty = Number(row[colMap['수량']] || 1);
-                                newOrder.receiver = row[colMap['수령자']];
+                                newOrder.receiver = row[colMap['수령자']]; // 원래 수취인 사용
                             }
 
                             newOrder.product = normalizeProductName(rawProductName);
                             newOrder.deliveryQty = 1; 
                             newOrder.salesQty = calculateRealSalesQty(rawProductName, excelQty);
 
+                            // 중복 체크 및 추가
                             if(!dbData.some(d => d.rawId == newOrder.rawId)) {
                                 dbData.push(newOrder);
                                 successCount++;
@@ -452,17 +450,30 @@
             });
         }
 
-        // --- 대시보드 및 차트 렌더링 ---
+        function renderChart(monthlyData) {
+            const productSales = {};
+            monthlyData.forEach(item => {
+                const name = item.product || "이름없음";
+                if(!productSales[name]) productSales[name] = 0;
+                productSales[name] += item.salesQty;
+            });
+            const sorted = Object.keys(productSales).map(k => ({name:k, qty:productSales[k]})).sort((a,b)=>b.qty-a.qty).slice(0,10);
+            if(salesChart) salesChart.destroy();
+            salesChart = new Chart(document.getElementById('salesChart').getContext('2d'), {
+                type: 'bar', data: { labels: sorted.map(p=>p.name), datasets: [{ label: '판매수량', data: sorted.map(p=>p.qty), backgroundColor: '#36a2eb' }] },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
+            });
+        }
+
         function renderDashboard() {
             const dateInput = document.getElementById('db-date').value;
             const today = dateInput ? new Date(dateInput) : new Date();
             const year = today.getFullYear();
             const month = String(today.getMonth() + 1).padStart(2, '0');
-            const ymStr = `${year}-${month}`; // "2026-01" 형태
+            const ymStr = `${year}-${month}`; 
             
             document.getElementById('dash-title').innerText = `📅 ${year}년 ${month}월 매출 현황`;
 
-            // 1. 표 그리기
             const thead = document.getElementById('date-header');
             const tbody = document.getElementById('dashboard-body');
             let html = '<th class="bg-light sticky-col">채널</th><th class="bg-light">목표</th><th class="bg-light">합계</th><th class="bg-light">달성률</th>';
@@ -472,7 +483,6 @@
             tbody.innerHTML = '';
             
             let totalRevenue = 0;
-            // 월별 데이터 미리 필터링
             const monthlyData = dbData.filter(d => d.date.startsWith(ymStr));
 
             CHANNELS.forEach(ch => {
@@ -491,67 +501,17 @@
                 tbody.innerHTML += `<tr><td class="fw-bold bg-white" style="position:sticky; left:0;">${ch}</td><td class="text-end text-secondary">${target.toLocaleString()}</td><td class="text-end fw-bold text-primary">${rowTotal.toLocaleString()}</td><td class="text-center small">${rate}</td>${cells}</tr>`;
             });
             document.getElementById('total-revenue').innerText = totalRevenue.toLocaleString();
-
-            // 2. 차트 그리기 (이달의 상품 TOP 10)
             renderChart(monthlyData);
         }
 
-        function renderChart(monthlyData) {
-            // 상품별 판매수량 합계 계산
-            const productSales = {};
-            monthlyData.forEach(item => {
-                const name = item.product || "이름없음";
-                if(!productSales[name]) productSales[name] = 0;
-                productSales[name] += item.salesQty;
-            });
-
-            // 배열로 변환 후 정렬 (많이 팔린 순)
-            const sortedProducts = Object.keys(productSales)
-                .map(key => ({ name: key, qty: productSales[key] }))
-                .sort((a,b) => b.qty - a.qty)
-                .slice(0, 10); // TOP 10
-
-            const labels = sortedProducts.map(p => p.name);
-            const data = sortedProducts.map(p => p.qty);
-
-            // 기존 차트 있으면 파괴
-            if (salesChart) salesChart.destroy();
-
-            const ctx = document.getElementById('salesChart').getContext('2d');
-            salesChart = new Chart(ctx, {
-                type: 'bar', // 막대 그래프
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '판매수량',
-                        data: data,
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y', // 가로 막대 그래프 (이름이 길어서 보기 좋음)
-                    scales: { x: { beginAtZero: true } }
-                }
-            });
-        }
-
         function renderDB() {
-            const tbody = document.getElementById('db-body'); 
-            tbody.innerHTML = '';
-            
-            // 날짜 기준 필터링 (월별)
+            const tbody = document.getElementById('db-body'); tbody.innerHTML = '';
             const dateInput = document.getElementById('db-date').value;
-            const ymStr = dateInput ? dateInput.substring(0, 7) : ""; // "2026-01"
-
+            const ymStr = dateInput ? dateInput.substring(0, 7) : ""; 
             document.getElementById('db-list-title').innerText = ymStr ? `${ymStr.split('-')[1]}월` : '전체';
 
-            // 해당 월 데이터만 필터링 + 내림차순 정렬
             const filteredData = dbData
-                .map((item, idx) => ({...item, originalIndex: idx})) // 원본 인덱스 보존
+                .map((item, idx) => ({...item, originalIndex: idx}))
                 .filter(item => item.date.startsWith(ymStr))
                 .sort((a,b) => new Date(b.date) - new Date(a.date));
 
@@ -595,14 +555,14 @@
         }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sh_sales_v18', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sh_sales_v18'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v20', JSON.stringify({ db: dbData, ads: adData, settlement: settlementData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v20'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; adData=p.ads||[]; settlementData=p.settlement||[]; } else { adData = [{channel: '쿠팡 윙', type: 'CPC', budget: 961417, spent: 0}, {channel: '쿠팡 로켓그로스', type: 'CPC', budget: 334404, spent: 0}]; } }
         function renderAds() { const t = document.getElementById('ads-budget-body'); t.innerHTML = ''; adData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.type}</td><td><input type="number" class="form-control form-control-sm text-end" value="${d.budget}" onchange="adData[${i}].budget=Number(this.value)"></td><td><input type="number" class="form-control form-control-sm text-end" value="${d.spent}" onchange="adData[${i}].spent=Number(this.value)"></td></tr>`); }
         function renderSettlement() { const t = document.getElementById('settlement-body'); t.innerHTML = ''; settlementData.forEach((d,i) => t.innerHTML += `<tr><td>${d.channel}</td><td>${d.date}</td><td class="text-end">${Number(d.amount).toLocaleString()}</td><td><button class="btn btn-xs btn-outline-danger" onclick="settlementData.splice(${i},1);saveToStorage();refreshAll()">삭제</button></td></tr>`); }
         function addSettlement() { settlementData.push({channel:document.getElementById('set-channel').value, date:document.getElementById('set-date').value, amount:document.getElementById('set-amount').value}); saveToStorage(); refreshAll(); }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sh_sales_v18')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sh_sales_v18', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sh_sales_v18'); location.reload(); } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v20')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v20', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v20'); location.reload(); } }
     </script>
 </body>
 </html>
