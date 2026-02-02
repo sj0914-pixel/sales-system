@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 31.0)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 32.0 - 광고비 차감)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -36,11 +36,11 @@
     <div class="header">
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
-                <h4 class="m-0">📊 SJ Innovation 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 31.0: 대표님 보고용 레이아웃 (세로 정렬)</small>
+                <h4 class="m-0">📊 SJ Innovation 통합 매출 시스템</h4>
+                <small class="text-light opacity-75">Ver 32.0: 광고비 차감 순수익 보고서</small>
             </div>
             <div>
-                <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (최종)</button>
+                <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (광고비 차감)</button>
                 <button class="btn btn-outline-light btn-sm" onclick="downloadData()">💾 백업 저장</button>
                 <button class="btn btn-outline-light btn-sm" onclick="document.getElementById('backupInput').click()">📂 백업 복원</button>
                 <input type="file" id="backupInput" style="display:none" onchange="loadDataFromBackup(this)">
@@ -56,7 +56,6 @@
         </ul>
 
         <div class="tab-content p-3 bg-white border border-top-0 rounded-bottom shadow-sm">
-            
             <div class="tab-pane fade show active" id="dashboard">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 id="dash-title" class="m-0 fw-bold">📅 2026년 전체 매출 현황</h5>
@@ -154,6 +153,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script>
         const CHANNELS = ['쿠팡 윙', '쿠팡 로켓배송', '쿠팡 로켓그로스', '스마트스토어', '지마켓', '11번가', '(SH)쿠팡 윙'];
+        let TARGETS = {'쿠팡 윙': 10000000, '쿠팡 로켓그로스': 24000000, '스마트스토어': 3000000};
         const MATCHING_RULES = [
             { target: "브레인롯 랜덤딱지 파우치", keywords: ["브레인롯"] },
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2개"] },
@@ -205,7 +205,7 @@
             dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files); });
         }
 
-        // --- 엑셀 보고서 다운로드 (세로 배치 수정됨) ---
+        // --- 엑셀 보고서 다운로드 (광고비 차감 로직 추가) ---
         async function exportMonthlyReport(year, month) {
             const monthStr = String(month).padStart(2, '0');
             const ymStr = `${year}-${monthStr}`;
@@ -213,7 +213,12 @@
             
             if(monthlyData.length === 0) { alert('해당 월에 데이터가 없습니다.'); return; }
 
-            // 1. 차트 이미지 생성 (TOP 5)
+            // *** 광고집행비 입력 받기 ***
+            let adCostInput = prompt(`${month}월 광고집행비를 입력하세요 (숫자만, 없으면 0)`, "0");
+            if (adCostInput === null) return; // 취소 누르면 종료
+            let adCost = Number(adCostInput.replace(/,/g, '')) || 0;
+
+            // 1. 차트 이미지 생성
             const productStats = {};
             monthlyData.forEach(item => {
                 const p = item.product || "이름없음";
@@ -259,9 +264,8 @@
             ws.getCell('A3').font = { bold: true };
 
             const headerRow = ws.getRow(4);
-            headerRow.values = ["채널명", "매출액"]; // 목표, 달성률 삭제
+            headerRow.values = ["채널명", "매출액"]; 
             headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            // 헤더 스타일 (A4, B4)
             ['A4', 'B4'].forEach(cellKey => {
                 const cell = ws.getCell(cellKey);
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
@@ -282,29 +286,43 @@
                 row.getCell(2).numFmt = '#,##0';
             });
 
-            // 합계 행
-            const totalRowIndex = currentRow + CHANNELS.length;
-            const totalRow = ws.getRow(totalRowIndex);
-            totalRow.getCell(1).value = "총 합계";
-            // 수식 적용: =SUM(B5:B11)
-            totalRow.getCell(2).value = { formula: `SUM(B${startRow}:B${totalRowIndex-1})` };
-            totalRow.getCell(2).numFmt = '#,##0';
-            totalRow.getCell(2).font = { bold: true, color: { argb: 'FF0000FF' } }; 
-            totalRow.font = { bold: true };
+            // --- 합계 및 광고비 차감 섹션 ---
+            const subTotalRowIndex = currentRow + CHANNELS.length;
+            
+            // 1. 매출 소계
+            const subTotalRow = ws.getRow(subTotalRowIndex);
+            subTotalRow.getCell(1).value = "매출 소계";
+            subTotalRow.getCell(2).value = { formula: `SUM(B${startRow}:B${subTotalRowIndex-1})` };
+            subTotalRow.getCell(2).numFmt = '#,##0';
+            subTotalRow.font = { bold: true };
+
+            // 2. 광고집행비 (빨간색)
+            const adRow = ws.getRow(subTotalRowIndex + 1);
+            adRow.getCell(1).value = "(-) 광고집행비";
+            adRow.getCell(2).value = adCost; 
+            adRow.getCell(2).numFmt = '#,##0';
+            adRow.font = { color: { argb: 'FFFF0000' } }; // 빨간색
+
+            // 3. 최종 합계 (파란색, 강조)
+            const finalRow = ws.getRow(subTotalRowIndex + 2);
+            finalRow.getCell(1).value = "최종 합계";
+            // 수식: 매출소계 - 광고비 (B열)
+            finalRow.getCell(2).value = { formula: `B${subTotalRowIndex} - B${subTotalRowIndex+1}` };
+            finalRow.getCell(2).numFmt = '#,##0';
+            finalRow.font = { size: 12, bold: true, color: { argb: 'FF0000FF' } }; // 파란색, 큼
+            finalRow.getCell(1).font = { size: 12, bold: true };
 
             // --- 2. 인기 상품 TOP 5 (채널별 매출표 아래에 배치) ---
-            const top5StartRow = totalRowIndex + 3; // 3칸 띄우고 시작
+            const top5StartRow = subTotalRowIndex + 5; // 좀 더 띄우고 시작
             ws.getCell(`A${top5StartRow}`).value = "■ 인기 상품 TOP 5";
             ws.getCell(`A${top5StartRow}`).font = { bold: true };
 
             const top5HeaderRow = ws.getRow(top5StartRow + 1);
-            // 헤더 설정 (A, B, C, D 열 사용)
             top5HeaderRow.getCell(1).value = "순위";
             top5HeaderRow.getCell(2).value = "상품명";
             top5HeaderRow.getCell(3).value = "판매수량";
             top5HeaderRow.getCell(4).value = "매출액";
             
-            // 스타일 적용
             for(let c=1; c<=4; c++) {
                 const cell = top5HeaderRow.getCell(c);
                 cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -312,7 +330,6 @@
                 cell.alignment = { horizontal: 'center' };
             }
 
-            // 데이터 채우기 (TOP 5)
             sortedProducts.forEach((p, idx) => {
                 const r = ws.getRow(top5StartRow + 2 + idx);
                 r.getCell(1).value = idx + 1;
@@ -322,29 +339,24 @@
                 r.getCell(4).numFmt = '#,##0';
             });
 
-            // 컬럼 너비 설정
             ws.columns = [
-                { width: 25 }, // A: 채널명 / 순위 (순위에는 좀 넓지만 무방)
-                { width: 40 }, // B: 매출액 / 상품명 (상품명 길니까 넓게)
-                { width: 15 }, // C: 판매수량
-                { width: 20 }  // D: 매출액
+                { width: 25 }, { width: 40 }, { width: 15 }, { width: 20 }
             ];
 
             // 3. 차트 이미지 삽입 (TOP 5 표 아래)
-            const chartStartRow = top5StartRow + 2 + 5 + 2; // TOP 5 데이터 끝난 후 2칸 아래
-            
+            const chartStartRow = top5StartRow + 2 + 5 + 2; 
             const imageId = wb.addImage({
                 base64: reportChart.toBase64Image(),
                 extension: 'png',
             });
             ws.addImage(imageId, {
-                tl: { col: 0, row: chartStartRow }, // A열부터 시작
+                tl: { col: 0, row: chartStartRow }, 
                 ext: { width: 500, height: 300 }
             });
 
             reportChart.destroy();
             const buffer = await wb.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `SJ_Innovation_${year}년_${month}월_매출보고서.xlsx`);
+            saveAs(new Blob([buffer]), `SJ_Innovation_${year}년_${month}월_매출보고서(순수익).xlsx`);
         }
 
         // 상단 버튼용
@@ -384,10 +396,11 @@
 
                 const monthDiv = document.createElement('div');
                 monthDiv.className = 'mb-4';
+                
                 let tableHtml = `
                     <div class="month-header">
                         <div><span class="me-2">${m}월</span><span class="badge bg-secondary fs-6">${monthRevenue.toLocaleString()}원</span></div>
-                        <button class="btn btn-sm btn-success fw-bold text-white" onclick="exportMonthlyReport(${year}, ${m})">📥 ${m}월 엑셀 저장</button>
+                        <button class="btn btn-sm btn-success fw-bold text-white" onclick="exportMonthlyReport(${year}, ${m})">📥 ${m}월 보고서</button>
                     </div>
                     <div class="table-responsive"><table class="table table-bordered table-hover table-sm table-striped text-center mb-0"><thead><tr class="table-light"><th class="bg-light sticky-col">채널</th><th class="bg-light">합계</th>${Array.from({length: lastDay}, (_, i) => `<th>${i+1}일</th>`).join('')}</tr></thead><tbody>`;
                 CHANNELS.forEach(ch => {
@@ -528,11 +541,11 @@
         function addOrUpdateSale() { const date = document.getElementById('db-date').value; const amount = document.getElementById('db-amount').value; if(!date || !amount) return alert('날짜/금액 필수'); const newItem = { date: date, mall: document.getElementById('db-mall').value, product: document.getElementById('db-product').value, deliveryQty: 1, amount: Number(amount), salesQty: Number(document.getElementById('db-sales-qty').value), receiver: document.getElementById('db-receiver').value, csType: document.getElementById('db-cs-type').value, csContent: document.getElementById('db-cs-content').value, returnStatus: document.getElementById('db-return').value, rawId: editingIndex > -1 ? dbData[editingIndex].rawId : ('MANUAL-'+Date.now()) }; if(editingIndex > -1) { dbData[editingIndex] = newItem; alert('수정완료'); cancelEdit(); } else { dbData.push(newItem); document.getElementById('db-product').value=''; document.getElementById('db-amount').value=''; } saveToStorage(); refreshAll(); }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sj_sales_v31', JSON.stringify({ db: dbData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v31'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v31')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v31', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v31'); location.reload(); } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v32', JSON.stringify({ db: dbData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v32'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v32')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v32', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v32'); location.reload(); } }
     </script>
 </body>
 </html>
