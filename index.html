@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 32.0 - 광고비 차감)</title>
+    <title>SJ Innovation 통합 매출 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -37,7 +37,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 통합 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 32.0: 광고비 차감 순수익 보고서</small>
+                <small class="text-light opacity-75">Ver 32.0</small>
             </div>
             <div>
                 <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (광고비 차감)</button>
@@ -543,9 +543,10 @@
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
         function saveToStorage() { localStorage.setItem('sj_sales_v32', JSON.stringify({ db: dbData })); }
         function loadFromStorage() { const s = localStorage.getItem('sj_sales_v32'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v32')); a.download = "SH_매출백업.json"; a.click(); }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v32')); a.download = "SJ_매출백업.json"; a.click(); }
         function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v32', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
         function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v32'); location.reload(); } }
     </script>
 </body>
 </html>
+
