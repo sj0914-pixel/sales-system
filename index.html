@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 33.0)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 34.0)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -37,7 +37,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 33.0: 광고비 분할 차감 + 보고서 디자인 개선</small>
+                <small class="text-light opacity-75">Ver 34.0: 매출 0원 자동 제외 (알짜 데이터만 관리)</small>
             </div>
             <div>
                 <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (최종)</button>
@@ -74,7 +74,7 @@
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
                     <div class="drop-icon">📂 📂 📂</div>
                     <p>모든 엑셀 파일 드래그 (자사양식, 로켓그로스, 쿠팡 등)</p>
-                    <p class="info-text mt-2 text-danger fw-bold">※ 판매량 0인 상품도 100% 저장됩니다.</p>
+                    <p class="info-text mt-2 text-primary fw-bold">※ 매출 0원 또는 판매량 0개인 데이터는 자동으로 제외됩니다.</p>
                     <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
                 <div class="input-area" id="inputFormArea">
@@ -123,6 +123,8 @@
             </div>
         </div>
     </div>
+
+    <canvas id="hiddenReportChart" style="display:none;"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -179,7 +181,7 @@
             dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files); });
         }
 
-        // --- (핵심) 엑셀 보고서 생성: 광고비 분할 + 디자인 ---
+        // --- 엑셀 보고서 다운로드 (광고비 차감, 디자인 적용) ---
         async function exportMonthlyReport(year, month) {
             const monthStr = String(month).padStart(2, '0');
             const ymStr = `${year}-${monthStr}`;
@@ -187,7 +189,7 @@
             
             if(monthlyData.length === 0) { alert('해당 월에 데이터가 없습니다.'); return; }
 
-            // 1. 광고비 입력 받기 (두 번 물어봄)
+            // 광고비 입력
             let adCostSJ = prompt(`(SJ) 쿠팡 윙 ${month}월 광고비를 입력하세요 (숫자만)`, "0");
             if (adCostSJ === null) return;
             let adCostSH = prompt(`(SH) 쿠팡 윙 ${month}월 광고비를 입력하세요 (숫자만)`, "0");
@@ -196,7 +198,7 @@
             let costSJ = Number(adCostSJ.replace(/,/g, '')) || 0;
             let costSH = Number(adCostSH.replace(/,/g, '')) || 0;
 
-            // 2. 인기상품 TOP 5 집계
+            // TOP 5 데이터 준비
             const productStats = {};
             monthlyData.forEach(item => {
                 const p = item.product || "이름없음";
@@ -206,24 +208,19 @@
             });
             const sortedProducts = Object.keys(productStats).map(k => ({name: k, ...productStats[k]})).sort((a,b) => b.qty - a.qty).slice(0, 5);
 
-            // 3. 엑셀 생성
             const wb = new ExcelJS.Workbook();
             const ws = wb.addWorksheet('월간 보고서');
+            const borderStyle = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
 
-            // 테두리 스타일
-            const borderStyle = {
-                top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
-            };
-
-            // --- 제목 (왼쪽 정렬) ---
+            // 제목
             ws.mergeCells('A1:D1');
             const titleCell = ws.getCell('A1');
             titleCell.value = `${year}년 ${month}월 SJ Innovation 매출 보고서`;
             titleCell.font = { size: 18, bold: true };
-            titleCell.alignment = { horizontal: 'left' }; // 왼쪽 정렬
+            titleCell.alignment = { horizontal: 'left' };
             ws.addRow([]);
 
-            // --- 1. 채널별 매출 현황 ---
+            // 1. 매출 현황
             ws.getCell('A3').value = "■ 채널별 매출 현황";
             ws.getCell('A3').font = { bold: true };
 
@@ -240,23 +237,19 @@
             const startRow = 5;
             let currentRow = startRow;
 
-            // 데이터 채우기
             CHANNELS.forEach((ch, idx) => {
                 const sum = monthlyData.filter(d => d.mall === ch).reduce((a,c) => a+c.amount, 0);
                 const row = ws.getRow(currentRow + idx);
                 row.getCell(1).value = ch;
                 row.getCell(2).value = sum; 
                 row.getCell(2).numFmt = '#,##0';
-                
-                // 테두리 적용
                 row.getCell(1).border = borderStyle;
                 row.getCell(2).border = borderStyle;
             });
 
-            // 합계 섹션
+            // 합계 및 광고비
             const subTotalRowIndex = currentRow + CHANNELS.length;
             
-            // 매출 소계
             const subRow = ws.getRow(subTotalRowIndex);
             subRow.getCell(1).value = "매출 소계";
             subRow.getCell(2).value = { formula: `SUM(B${startRow}:B${subTotalRowIndex-1})` };
@@ -264,7 +257,6 @@
             subRow.font = { bold: true };
             subRow.getCell(1).border = borderStyle; subRow.getCell(2).border = borderStyle;
 
-            // (-) SJ 광고비
             const sjRow = ws.getRow(subTotalRowIndex + 1);
             sjRow.getCell(1).value = "(-) (SJ)쿠팡 윙 광고";
             sjRow.getCell(2).value = costSJ;
@@ -272,7 +264,6 @@
             sjRow.font = { color: { argb: 'FFFF0000' } };
             sjRow.getCell(1).border = borderStyle; sjRow.getCell(2).border = borderStyle;
 
-            // (-) SH 광고비
             const shRow = ws.getRow(subTotalRowIndex + 2);
             shRow.getCell(1).value = "(-) (SH)쿠팡 윙 광고";
             shRow.getCell(2).value = costSH;
@@ -280,7 +271,6 @@
             shRow.font = { color: { argb: 'FFFF0000' } };
             shRow.getCell(1).border = borderStyle; shRow.getCell(2).border = borderStyle;
 
-            // 최종 합계 (순수익)
             const finalRow = ws.getRow(subTotalRowIndex + 3);
             finalRow.getCell(1).value = "최종 합계 (순수익)";
             finalRow.getCell(2).value = { formula: `B${subTotalRowIndex} - B${subTotalRowIndex+1} - B${subTotalRowIndex+2}` };
@@ -289,7 +279,7 @@
             finalRow.getCell(1).font = { size: 12, bold: true };
             finalRow.getCell(1).border = borderStyle; finalRow.getCell(2).border = borderStyle;
 
-            // --- 2. 인기 상품 TOP 5 ---
+            // 2. 인기 상품 TOP 5
             const top5StartRow = subTotalRowIndex + 6; 
             ws.getCell(`A${top5StartRow}`).value = "■ 인기 상품 TOP 5";
             ws.getCell(`A${top5StartRow}`).font = { bold: true };
@@ -315,14 +305,11 @@
                 r.getCell(3).value = p.qty;
                 r.getCell(4).value = p.amount;
                 r.getCell(4).numFmt = '#,##0';
-                
                 for(let c=1; c<=4; c++) r.getCell(c).border = borderStyle;
             });
 
-            // 너비 조정
             ws.columns = [{ width: 25 }, { width: 40 }, { width: 15 }, { width: 20 }];
 
-            // 저장
             const buffer = await wb.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `SJ_Innovation_${year}년_${month}월_매출보고서(순수익).xlsx`);
         }
@@ -364,7 +351,6 @@
 
                 const monthDiv = document.createElement('div');
                 monthDiv.className = 'mb-4';
-                
                 let tableHtml = `
                     <div class="month-header">
                         <div><span class="me-2">${m}월</span><span class="badge bg-secondary fs-6">${monthRevenue.toLocaleString()}원</span></div>
@@ -428,7 +414,7 @@
             const isForceDate = document.getElementById('force-date-check').checked;
             const manualDate = document.getElementById('db-date').value;
             if(isForceDate && !manualDate) { alert('날짜를 선택해주세요!'); return; }
-            let totalSuccess = 0, lastFileDate = "";
+            let totalSuccess = 0, totalSkipped = 0, lastFileDate = "";
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 let fileDateStr = "";
@@ -438,14 +424,16 @@
                 const finalDate = isForceDate ? manualDate : fileDateStr;
                 lastFileDate = finalDate;
                 try {
+                    // *** 0원/0개인 경우 skipped로 리턴됨 ***
                     const result = await processSingleFile(file, finalDate, isRocketGrowth);
                     totalSuccess += result.inserted;
+                    totalSkipped += result.skipped;
                 } catch (e) { console.error(`${file.name} 오류:`, e); }
             }
             if (lastFileDate) document.getElementById('db-date').value = lastFileDate;
             saveToStorage(); refreshAll();
             const modeMsg = isForceDate ? "강제 적용됨" : "파일 날짜 적용됨";
-            alert(`✅ 처리 완료!\n- 총 등록: ${totalSuccess}건\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
+            alert(`✅ 처리 완료!\n- 총 등록: ${totalSuccess}건\n- 제외됨: ${totalSkipped}건 (매출/판매량 0)\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
             document.getElementById('excelUpload').value = '';
         }
 
@@ -457,7 +445,7 @@
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
                         const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
-                        if(jsonData.length < 1) { resolve({inserted:0}); return; }
+                        if(jsonData.length < 1) { resolve({inserted:0, skipped:0}); return; }
                         let headerRow = -1, platform = 'UNKNOWN', colMap = {};
                         for(let r=0; r<Math.min(10, jsonData.length); r++) {
                             const rowStr = JSON.stringify(jsonData[r]);
@@ -467,9 +455,9 @@
                             else if(rowStr.includes('판매아이디')) { headerRow = r; platform = 'GMARKET'; break; } 
                             else if(rowStr.includes('판매량') && rowStr.includes('매출(원)')) { headerRow = r; platform = 'ROCKET_GROWTH'; break; }
                         }
-                        if(headerRow === -1) { resolve({inserted:0}); return; }
+                        if(headerRow === -1) { resolve({inserted:0, skipped:0}); return; }
                         jsonData[headerRow].forEach((col, idx) => { if(col) colMap[String(col).trim()] = idx; });
-                        let inserted = 0;
+                        let inserted = 0, skipped = 0;
                         for(let i = headerRow + 1; i < jsonData.length; i++) {
                             const row = jsonData[i];
                             if(!row || row.length === 0) continue;
@@ -490,30 +478,38 @@
                                 let price = parseMoney(row[colMap['결제액']]); if(!price) price = parseMoney(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]); newOrder.amount = price; excelQty = Number(row[colMap['구매수(수량)']] || 1); newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
                             } else if (platform === 'ROCKET_GROWTH') {
                                 if(!row[colMap['상품명']]) continue; excelQty = parseMoney(row[colMap['판매량']]);
+                                // *** 매출 0원이거나 판매량 0개이면 저장 안 함 ***
+                                let amt = parseMoney(row[colMap['매출(원)']]);
+                                if (excelQty === 0 || amt === 0) { skipped++; continue; }
                                 newOrder.mall = '쿠팡 로켓그로스'; newOrder.rawId = `GROWTH-${dateStr}-${i}`; rawProductName = (row[colMap['상품명']]||'') + ' ' + (row[colMap['옵션명']]||'');
-                                newOrder.amount = parseMoney(row[colMap['매출(원)']]); newOrder.receiver = '쿠팡'; 
+                                newOrder.amount = amt; newOrder.receiver = '쿠팡'; 
                             } else if (platform === 'GMARKET') {
                                 if(!row[colMap['주문번호']]) continue; newOrder.mall = '지마켓'; newOrder.rawId = row[colMap['주문번호']]; rawProductName = row[colMap['상품명']]; newOrder.amount = parseMoney(row[colMap['판매금액']] || (row[colMap['판매단가']] * row[colMap['수량']])); excelQty = Number(row[colMap['수량']] || 1); newOrder.receiver = row[colMap['수령인명']];
                             }
+                            
+                            // 공통: 혹시라도 금액이 0이면 저장 안 함
+                            if (newOrder.amount === 0) { skipped++; continue; }
+
                             newOrder.product = normalizeProductName(rawProductName); newOrder.deliveryQty = 1; newOrder.salesQty = calculateRealSalesQty(rawProductName, excelQty);
                             if(!dbData.some(d => d.rawId == newOrder.rawId)) { dbData.push(newOrder); inserted++; }
                         }
-                        resolve({inserted: inserted});
+                        resolve({inserted: inserted, skipped: skipped});
                     } catch(err) { reject(err); }
                 }; reader.readAsArrayBuffer(file);
             });
         }
 
+        // 기존 유지
         function editSale(index) { editingIndex = index; const item = dbData[index]; document.getElementById('db-date').value = item.date; document.getElementById('db-mall').value = item.mall; document.getElementById('db-product').value = item.product; document.getElementById('db-amount').value = item.amount; document.getElementById('db-sales-qty').value = item.salesQty; document.getElementById('db-receiver').value = item.receiver; document.getElementById('db-cs-type').value = item.csType||''; document.getElementById('db-cs-content').value = item.csContent||''; document.getElementById('db-return').value = item.returnStatus||''; document.getElementById('formTitle').innerText = "✏️ 수정 중..."; document.getElementById('submitBtn').innerText = "💾 저장"; document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-success'); document.getElementById('cancelEditBtn').style.display = 'block'; document.getElementById('inputFormArea').classList.add('editing-mode'); document.getElementById('inputFormArea').scrollIntoView({ behavior: 'smooth' }); }
         function cancelEdit() { editingIndex = -1; document.getElementById('db-product').value = ''; document.getElementById('db-amount').value = ''; document.getElementById('db-receiver').value = ''; document.getElementById('db-cs-type').value = ''; document.getElementById('db-cs-content').value = ''; document.getElementById('db-return').value = ''; document.getElementById('formTitle').innerText = "✏️ 데이터 입력"; document.getElementById('submitBtn').innerText = "➕ 추가"; document.getElementById('submitBtn').classList.replace('btn-success', 'btn-primary'); document.getElementById('cancelEditBtn').style.display = 'none'; document.getElementById('inputFormArea').classList.remove('editing-mode'); }
         function addOrUpdateSale() { const date = document.getElementById('db-date').value; const amount = document.getElementById('db-amount').value; if(!date || !amount) return alert('날짜/금액 필수'); const newItem = { date: date, mall: document.getElementById('db-mall').value, product: document.getElementById('db-product').value, deliveryQty: 1, amount: Number(amount), salesQty: Number(document.getElementById('db-sales-qty').value), receiver: document.getElementById('db-receiver').value, csType: document.getElementById('db-cs-type').value, csContent: document.getElementById('db-cs-content').value, returnStatus: document.getElementById('db-return').value, rawId: editingIndex > -1 ? dbData[editingIndex].rawId : ('MANUAL-'+Date.now()) }; if(editingIndex > -1) { dbData[editingIndex] = newItem; alert('수정완료'); cancelEdit(); } else { dbData.push(newItem); document.getElementById('db-product').value=''; document.getElementById('db-amount').value=''; } saveToStorage(); refreshAll(); }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sj_sales_v33', JSON.stringify({ db: dbData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v33'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v33')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v33', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v33'); location.reload(); } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v34', JSON.stringify({ db: dbData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v34'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v34')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v34', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v34'); location.reload(); } }
     </script>
 </body>
 </html>
