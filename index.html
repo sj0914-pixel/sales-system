@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 36.2)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 36.3)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -32,7 +32,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 36.2: 시즌6 상품명 자동완성 엔진 탑재</small>
+                <small class="text-light opacity-75">Ver 36.3: 로켓그로스 시즌6 완벽 대응</small>
             </div>
             <div>
                 <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (최종)</button>
@@ -130,6 +130,7 @@
             { target: "티니핑 시즌6 풀커버 교정케이스 세트-사뿐핑", keywords: ["풀커버", "사뿐"] },
             { target: "티니핑 시즌6 풀커버 교정케이스 세트-아름핑", keywords: ["풀커버", "아름"] },
             { target: "티니핑 시즌6 풀커버 교정케이스 세트-뽀니핑", keywords: ["풀커버", "뽀니"] },
+            { target: "티니핑 시즌6 풀커버 교정케이스 세트", keywords: ["프린세스", "풀커버"] }, // 로켓그로스 옵션 없는 건 대응
             { target: "티니핑 시즌6 멀티케이스-하츄핑", keywords: ["멀티케이스", "하츄"] },
             { target: "티니핑 시즌6 양손 교정젓가락-하츄핑", keywords: ["양손", "하츄"] },
             { target: "티니핑 시즌6 교정수저세트-아름핑", keywords: ["교정수저", "아름"] },
@@ -430,12 +431,7 @@
             document.getElementById('db-count').innerText = filteredData.length;
         }
 
-        function normalizeProductName(rawName) { if(!rawName) return ""; const cleanName = rawName.replace(/\s+/g, '').toLowerCase(); for (let rule of MATCHING_RULES) { 
-            // 키워드 검사도 띄어쓰기 없이 소문자로
-            let keywords = rule.keywords.map(k => k.replace(/\s+/g, '').toLowerCase());
-            if (keywords.every(k => cleanName.includes(k))) return rule.target; 
-        } return rawName; }
-        
+        function normalizeProductName(rawName) { if(!rawName) return ""; const cleanName = rawName.replace(/\s+/g, '').toLowerCase(); for (let rule of MATCHING_RULES) { if (rule.keywords.every(k => cleanName.includes(k.replace(/\s+/g, '').toLowerCase()))) return rule.target; } return rawName; }
         function parseMoney(val) { return Number(String(val||0).replace(/,/g, '').trim()) || 0; }
         function calculateRealSalesQty(rawName, excelQty) { if (!rawName) return excelQty; const match = rawName.match(/(\d+)\s*(팩|개|set|세트|box|박스)(?!입)/i); return match ? (excelQty * parseInt(match[1])) : excelQty; }
         function getDateFromFilename(filename) { const match = filename.match(/_(\d{4})\./); if (match) { return `${new Date().getFullYear()}-${match[1].substring(0,2)}-${match[1].substring(2,4)}`; } return ""; }
@@ -532,11 +528,11 @@
         function addOrUpdateSale() { const date = document.getElementById('db-date').value; const amount = document.getElementById('db-amount').value; if(!date || !amount) return alert('날짜/금액 필수'); const newItem = { date: date, mall: document.getElementById('db-mall').value, product: document.getElementById('db-product').value, deliveryQty: 1, amount: Number(amount), salesQty: Number(document.getElementById('db-sales-qty').value), receiver: document.getElementById('db-receiver').value, csType: document.getElementById('db-cs-type').value, csContent: document.getElementById('db-cs-content').value, returnStatus: document.getElementById('db-return').value, rawId: editingIndex > -1 ? dbData[editingIndex].rawId : ('MANUAL-'+Date.now()) }; if(editingIndex > -1) { dbData[editingIndex] = newItem; alert('수정완료'); cancelEdit(); } else { dbData.push(newItem); document.getElementById('db-product').value=''; document.getElementById('db-amount').value=''; } saveToStorage(); refreshAll(); }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sj_sales_v36_2', JSON.stringify({ db: dbData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v36_2'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v36_2')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v36_2', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v36_2'); location.reload(); } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v36_3', JSON.stringify({ db: dbData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v36_3'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v36_3')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v36_3', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v36_3'); location.reload(); } }
     </script>
 </body>
 </html>
