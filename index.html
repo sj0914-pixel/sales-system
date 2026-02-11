@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 36.0)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 36.1)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -37,7 +37,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 36.0: 시즌6 신제품명 자동 변환 추가</small>
+                <small class="text-light opacity-75">Ver 36.1: 백업 데이터 내 시즌6 상품명 일괄 수정 적용</small>
             </div>
             <div>
                 <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (최종)</button>
@@ -161,7 +161,7 @@
             { target: "참존 톤업핏 마스크 대형 25개입-코랄", keywords: ["코랄"] },
             { target: "참존 톤업핏 마스크 대형 25개입-누드업베이지", keywords: ["누드"] },
             
-            // *** [추가된 부분] 티니핑 시즌6 신제품 ***
+            // *** 티니핑 시즌6 신제품 ***
             { target: "티니핑 시즌6 풀커버 교정케이스 세트-하츄핑", keywords: ["풀커버", "하츄핑"] },
             { target: "티니핑 시즌6 풀커버 교정케이스 세트-사뿐핑", keywords: ["풀커버", "사뿐"] },
             { target: "티니핑 시즌6 풀커버 교정케이스 세트-아름핑", keywords: ["풀커버", "아름"] },
@@ -474,7 +474,7 @@
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
                         const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
-                        if(jsonData.length < 1) { resolve({inserted:0}); return; }
+                        if(jsonData.length < 1) { resolve({inserted:0, skipped:0}); return; }
                         let headerRow = -1, platform = 'UNKNOWN', colMap = {};
                         for(let r=0; r<Math.min(10, jsonData.length); r++) {
                             const rowStr = JSON.stringify(jsonData[r]);
@@ -484,7 +484,7 @@
                             else if(rowStr.includes('판매아이디')) { headerRow = r; platform = 'GMARKET'; break; } 
                             else if(rowStr.includes('판매량') && rowStr.includes('매출(원)')) { headerRow = r; platform = 'ROCKET_GROWTH'; break; }
                         }
-                        if(headerRow === -1) { resolve({inserted:0}); return; }
+                        if(headerRow === -1) { resolve({inserted:0, skipped:0}); return; }
                         jsonData[headerRow].forEach((col, idx) => { if(col) colMap[String(col).trim()] = idx; });
                         let inserted = 0;
                         for(let i = headerRow + 1; i < jsonData.length; i++) {
