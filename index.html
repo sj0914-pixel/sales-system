@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SJ Innovation 통합 매출 시스템 (Ver 35.0)</title>
+    <title>SJ Innovation 통합 매출 시스템 (Ver 36.0)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -37,7 +37,7 @@
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="m-0">📊 SJ Innovation 매출 시스템</h4>
-                <small class="text-light opacity-75">Ver 35.0: 0원 및 마이너스 자동 제외</small>
+                <small class="text-light opacity-75">Ver 36.0: 시즌6 신제품명 자동 변환 추가</small>
             </div>
             <div>
                 <button class="btn btn-success btn-sm fw-bold me-2" onclick="exportReportToExcel()">📑 보고서 다운 (최종)</button>
@@ -74,7 +74,7 @@
                 <div class="drop-zone" id="dropZone" onclick="document.getElementById('excelUpload').click()">
                     <div class="drop-icon">📂 📂 📂</div>
                     <p>모든 엑셀 파일 드래그 (자사양식, 로켓그로스, 쿠팡 등)</p>
-                    <p class="info-text mt-2 text-primary fw-bold">※ 0원 및 마이너스(-) 매출은 자동으로 제외됩니다.</p>
+                    <p class="info-text mt-2 text-primary fw-bold">※ 0원/마이너스 제외 + 시즌6 상품명 자동 정리</p>
                     <input type="file" id="excelUpload" style="display:none" accept=".xls, .xlsx, .csv" multiple onchange="handleExcelUpload(this.files)">
                 </div>
                 <div class="input-area" id="inputFormArea">
@@ -130,6 +130,7 @@
     <script>
         const CHANNELS = ['쿠팡 윙', '쿠팡 로켓배송', '쿠팡 로켓그로스', '스마트스토어', '지마켓', '11번가', '(SH)쿠팡 윙'];
         const MATCHING_RULES = [
+            // 기존 제품들
             { target: "브레인롯 랜덤딱지 파우치", keywords: ["브레인롯"] },
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2개"] },
             { target: "젠바디 코로나 자가검사키트 / 2개입", keywords: ["젠바디", "2입"] },
@@ -158,7 +159,18 @@
             { target: "참존 KF94 톤업핏 블랙라벨 라이트 마스크 중형 25개입-바닐라베이지", keywords: ["바닐라"] },
             { target: "참존 KF94 톤업핏 블랙라벨 라이트 마스크 중형 25개입-무드그레이", keywords: ["그레이"] },
             { target: "참존 톤업핏 마스크 대형 25개입-코랄", keywords: ["코랄"] },
-            { target: "참존 톤업핏 마스크 대형 25개입-누드업베이지", keywords: ["누드"] }
+            { target: "참존 톤업핏 마스크 대형 25개입-누드업베이지", keywords: ["누드"] },
+            
+            // *** [추가된 부분] 티니핑 시즌6 신제품 ***
+            { target: "티니핑 시즌6 풀커버 교정케이스 세트-하츄핑", keywords: ["풀커버", "하츄핑"] },
+            { target: "티니핑 시즌6 풀커버 교정케이스 세트-사뿐핑", keywords: ["풀커버", "사뿐"] },
+            { target: "티니핑 시즌6 풀커버 교정케이스 세트-아름핑", keywords: ["풀커버", "아름"] },
+            { target: "티니핑 시즌6 풀커버 교정케이스 세트-뽀니핑", keywords: ["풀커버", "뽀니"] },
+            { target: "티니핑 시즌6 멀티케이스-하츄핑", keywords: ["멀티케이스", "하츄핑"] },
+            { target: "티니핑 시즌6 양손 교정젓가락-하츄핑", keywords: ["양손", "하츄핑"] },
+            { target: "티니핑 시즌6 교정수저세트-아름핑", keywords: ["교정수저", "아름"] },
+            { target: "티니핑 시즌6 교정수저세트-하츄핑", keywords: ["교정수저", "하츄핑"] },
+            { target: "티니핑 시즌6 진공젓가락세트-로열핑", keywords: ["진공", "로열"] }
         ];
 
         let dbData = [], editingIndex = -1, salesChart = null;
@@ -180,7 +192,6 @@
             dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleExcelUpload(e.dataTransfer.files); });
         }
 
-        // --- 엑셀 보고서 생성 ---
         async function exportMonthlyReport(year, month) {
             const monthStr = String(month).padStart(2, '0');
             const ymStr = `${year}-${monthStr}`;
@@ -204,6 +215,25 @@
                 productStats[p].amount += item.amount;
             });
             const sortedProducts = Object.keys(productStats).map(k => ({name: k, ...productStats[k]})).sort((a,b) => b.qty - a.qty).slice(0, 5);
+
+            const hiddenCanvas = document.getElementById('hiddenReportChart');
+            const hiddenCtx = hiddenCanvas.getContext('2d');
+            hiddenCanvas.width = 600; hiddenCanvas.height = 350;
+
+            const reportChart = new Chart(hiddenCtx, {
+                type: 'bar',
+                data: {
+                    labels: sortedProducts.map(p => p.name.length > 10 ? p.name.substring(0,10)+"..." : p.name),
+                    datasets: [{
+                        label: '판매수량', data: sortedProducts.map(p => p.qty),
+                        backgroundColor: '#36a2eb', borderColor: '#36a2eb', borderWidth: 1
+                    }]
+                },
+                options: { 
+                    animation: false, responsive: false, indexAxis: 'y',
+                    plugins: { legend: { display: false }, title: { display: true, text: `${month}월 인기상품 TOP 5`, font: {size: 16} } }
+                }
+            });
 
             const wb = new ExcelJS.Workbook();
             const ws = wb.addWorksheet('월간 보고서');
@@ -302,6 +332,17 @@
 
             ws.columns = [{ width: 25 }, { width: 40 }, { width: 15 }, { width: 20 }];
 
+            const chartStartRow = top5StartRow + 2 + 5 + 2; 
+            const imageId = wb.addImage({
+                base64: reportChart.toBase64Image(),
+                extension: 'png',
+            });
+            ws.addImage(imageId, {
+                tl: { col: 0, row: chartStartRow }, 
+                ext: { width: 500, height: 300 }
+            });
+
+            reportChart.destroy();
             const buffer = await wb.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `SJ_Innovation_${year}년_${month}월_매출보고서(순수익).xlsx`);
         }
@@ -421,7 +462,7 @@
             if (lastFileDate) document.getElementById('db-date').value = lastFileDate;
             saveToStorage(); refreshAll();
             const modeMsg = isForceDate ? "강제 적용됨" : "파일 날짜 적용됨";
-            alert(`✅ 처리 완료!\n- 총 등록: ${totalSuccess}건\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
+            alert(`✅ 처리 완료!\n- 총 등록: ${totalSuccess}건 (0원/음수 제외)\n- 기준일: ${lastFileDate}\n(${modeMsg})`);
             document.getElementById('excelUpload').value = '';
         }
 
@@ -466,10 +507,8 @@
                                 let price = parseMoney(row[colMap['결제액']]); if(!price) price = parseMoney(row[colMap['옵션판매가(판매단가)']]) * Number(row[colMap['구매수(수량)']]); newOrder.amount = price; excelQty = Number(row[colMap['구매수(수량)']] || 1); newOrder.receiver = row[colMap['수취인이름']] || row[colMap['구매자이름']];
                             } else if (platform === 'ROCKET_GROWTH') {
                                 if(!row[colMap['상품명']]) continue; excelQty = parseMoney(row[colMap['판매량']]);
-                                
                                 let amt = parseMoney(row[colMap['매출(원)']]);
                                 if (amt <= 0) { continue; } // 0원 이하 제외
-                                
                                 newOrder.mall = '쿠팡 로켓그로스'; newOrder.rawId = `GROWTH-${dateStr}-${i}`; rawProductName = (row[colMap['상품명']]||'') + ' ' + (row[colMap['옵션명']]||'');
                                 newOrder.amount = amt; newOrder.receiver = '쿠팡'; 
                             } else if (platform === 'GMARKET') {
@@ -493,11 +532,11 @@
         function addOrUpdateSale() { const date = document.getElementById('db-date').value; const amount = document.getElementById('db-amount').value; if(!date || !amount) return alert('날짜/금액 필수'); const newItem = { date: date, mall: document.getElementById('db-mall').value, product: document.getElementById('db-product').value, deliveryQty: 1, amount: Number(amount), salesQty: Number(document.getElementById('db-sales-qty').value), receiver: document.getElementById('db-receiver').value, csType: document.getElementById('db-cs-type').value, csContent: document.getElementById('db-cs-content').value, returnStatus: document.getElementById('db-return').value, rawId: editingIndex > -1 ? dbData[editingIndex].rawId : ('MANUAL-'+Date.now()) }; if(editingIndex > -1) { dbData[editingIndex] = newItem; alert('수정완료'); cancelEdit(); } else { dbData.push(newItem); document.getElementById('db-product').value=''; document.getElementById('db-amount').value=''; } saveToStorage(); refreshAll(); }
         function deleteDB(idx) { if(confirm('삭제?')) { dbData.splice(idx, 1); saveToStorage(); refreshAll(); } }
         function clearDB() { if(confirm('전체삭제?')) { dbData=[]; saveToStorage(); refreshAll(); } }
-        function saveToStorage() { localStorage.setItem('sj_sales_v35', JSON.stringify({ db: dbData })); }
-        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v35'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
-        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v35')); a.download = "SH_매출백업.json"; a.click(); }
-        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v35', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
-        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v35'); location.reload(); } }
+        function saveToStorage() { localStorage.setItem('sj_sales_v36', JSON.stringify({ db: dbData })); }
+        function loadFromStorage() { const s = localStorage.getItem('sj_sales_v36'); if(s) { const p=JSON.parse(s); dbData=p.db||[]; } }
+        function downloadData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(localStorage.getItem('sj_sales_v36')); a.download = "SH_매출백업.json"; a.click(); }
+        function loadDataFromBackup(input) { const r = new FileReader(); r.onload = e => { localStorage.setItem('sj_sales_v36', e.target.result); location.reload(); }; r.readAsText(input.files[0]); }
+        function resetData() { if(confirm('초기화?')) { localStorage.removeItem('sj_sales_v36'); location.reload(); } }
     </script>
 </body>
 </html>
